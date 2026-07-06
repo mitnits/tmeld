@@ -1,0 +1,8 @@
+repository: https://gitlab.gnome.org/GNOME/meld.git
+commit: 9c4be506a26dd0a0742887ee4d6e28208812c792
+files:
+  - meld/matchers/__init__.py
+  - meld/matchers/myers.py
+  - meld/matchers/diffutil.py
+  - meld/matchers/merge.py
+  - meld/matchers/helpers.py

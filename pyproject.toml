@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tmeld"
+version = "0.0.1"
+description = "Meld, in your terminal: a faithful TUI port of the Meld diff/merge tool"
+readme = "README.md"
+license = "GPL-2.0-or-later"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+tmeld-dump = "tmeld.dump:main"
+
+[tool.setuptools.packages.find]
+include = ["tmeld*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
