@@ -75,5 +75,18 @@ working context that isn't in either.
 - Phase 2/3 polish done: current-chunk emphasis (cursor-driven, blended
   fills via palette.blend), locate_chunk-based nav (cursor-relative like
   Meld), copy-above/below (Alt+[ ] ; '), ChunkMap viewport indicator.
+- Phase 5 done: three-way merge. `tmeld local base remote` (middle =
+  merged file, Meld/git-mergetool convention; `-o` redirects middle
+  saves; exit code 0 iff middle saved — README has the .gitconfig
+  stanza). Comparison/inline/gutters generalized to N panes; two
+  ActionGutters each own an adjacent pane pair; scroll influence
+  cascades through the middle pane (re-master on pane 1, upstream
+  _sync_vscroll); chunk actions use upstream get_action_panes semantics
+  (2-way push ignores focus; pull/copy = focused±1, bell off-edge —
+  NOTE: 2-way pull now bells at the edge pane, was "pull from other").
+  Ctrl+K/J conflict nav, Alt+M merge-all-non-conflicting (vendored
+  Merger.merge_3_files, conflicts keep base). Merge-cache indices don't
+  map 1:1 to per-pane chunk lists in 3-way — always differ.get_chunk.
+  71 tests green. Demo files: /tmp/local.py /tmp/base.py /tmp/remote.py.
 - Still open: chunk boundary lines (underline approx), Phase 4 linkmap,
-  Phase 5 three-way, Phase 6 dirdiff, Phase 7 VC view, Phase 8 graphics.
+  Phase 6 dirdiff, Phase 7 VC view, Phase 8 graphics.

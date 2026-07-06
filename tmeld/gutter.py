@@ -16,7 +16,7 @@ Panes keep a 1-row top border (title), so gutter row r corresponds to
 pane document line r + scroll - 1.
 """
 
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 from rich.segment import Segment
 from rich.style import Style
@@ -44,22 +44,20 @@ class ActionGutter(Widget):
     def __init__(self, theme_def: Theme, **kwargs) -> None:
         super().__init__(**kwargs)
         self.theme_def = theme_def
-        self.panes: List = []  # DiffPanes, set by the app after compose
-        # per pane: {chunk start line: (chunk_index, tag)}
+        # The adjacent DiffPanes this gutter sits between, and their app
+        # pane indices — both set by the app after compose. Clicks push
+        # between exactly this pair.
+        self.panes: List = []
+        self.pane_pair: Tuple[int, int] = (0, 1)
+        # per column: {chunk start line: (merge-cache index, tag)}
         self._starts: List[Dict[int, tuple]] = [{}, {}]
         self.on_push: Optional[PushCallback] = None
 
-    def set_chunks(self, pane_chunks: List[list]) -> None:
-        """pane_chunks[i] are pane-oriented chunks from single_changes(i);
-        arrows appear only where the pane actually has lines to push."""
-        self._starts = [
-            {
-                c.start_a: (index, c.tag)
-                for index, c in enumerate(chunks)
-                if c.start_a != c.end_a
-            }
-            for chunks in pane_chunks
-        ]
+    def set_starts(self, starts: List[Dict[int, tuple]]) -> None:
+        """Per-column arrow positions from Comparison.action_starts:
+        {start line: (chunk index, pane-oriented tag)}, entries only
+        where that side has lines to push."""
+        self._starts = starts
         self.refresh()
 
     def _doc_line(self, pane_index: int, y: int) -> int:
@@ -107,4 +105,4 @@ class ActionGutter(Widget):
         if entry is None or self.on_push is None:
             return
         index, _tag = entry
-        self.on_push(col, 1 - col, index)
+        self.on_push(self.pane_pair[col], self.pane_pair[1 - col], index)

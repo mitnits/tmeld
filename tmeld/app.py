@@ -1,16 +1,22 @@
-"""tmeld application shell: two-pane editable file comparison (Phase 3).
+"""tmeld application shell: two- and three-pane editable file comparison.
 
 Keybindings follow Meld exactly (PARITY.md §3). Alt+arrow availability
 depends on the terminal sending ESC-prefixed sequences ("Option as Esc+"
 in iTerm2); Ctrl+D/E are Meld's own alternates for chunk navigation.
 
 Chunk action semantics ported from upstream meld/filediff.py:2611-2674
-(replace_chunk/delete_chunk, including the EOF newline handling).
+(replace_chunk/delete_chunk, including the EOF newline handling); action
+pane resolution from filediff.get_action_panes/action_push_change_*
+(2-way push ignores focus; 3-way acts focused pane -> neighbor).
+
+3-way: middle pane is the merged file (git mergetool convention:
+`tmeld $LOCAL $MERGED $REMOTE`; --output redirects middle-pane saves,
+mirroring meld -o). Exit code is 0 only if the middle pane was saved.
 """
 
 import argparse
 import sys
-from typing import List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -23,9 +29,20 @@ from tmeld.comparison import Comparison
 from tmeld.gutter import ActionGutter
 from tmeld.palette import DEFAULT_THEME, THEMES
 from tmeld.pane import DiffPane
-from tmeld.scroll import sync_scroll_target
+from tmeld.scroll import calc_syncpoint, interpolate_line, scroll_offset_for_line
 
 REDIFF_DEBOUNCE = 0.25  # seconds after last keystroke
+
+# Direction offsets for chunk actions (upstream filediff.py:102)
+PANE_LEFT, PANE_RIGHT = -1, +1
+
+# 3-way scroll influence flows through the middle pane (PARITY.md §4):
+# masters left/middle/right influence these panes, in order. When the
+# middle pane is influenced first, it becomes the master for the rest.
+SCROLL_INFLUENCE: Dict[int, tuple] = {
+    2: ((1,), (0,)),
+    3: ((1, 2), (0, 2), (1, 0)),
+}
 
 
 class TmeldApp(App):
@@ -50,8 +67,10 @@ class TmeldApp(App):
         Binding("alt+up,ctrl+e", "previous_chunk", "Prev change", priority=True),
         Binding("alt+right", "push_right", "Push right", priority=True),
         Binding("alt+left", "push_left", "Push left", priority=True),
-        Binding("alt+shift+right", "pull_left", "Pull from right", priority=True),
-        Binding("alt+shift+left", "pull_right", "Pull from left", priority=True),
+        # Meld action names: "pull left/right" is the arrow drawn on the
+        # button; the key pulls FROM that neighbor into the focused pane
+        Binding("alt+shift+right", "pull_left", "Pull from left", priority=True),
+        Binding("alt+shift+left", "pull_right", "Pull from right", priority=True),
         Binding("alt+delete", "delete_chunk", "Delete", priority=True),
         Binding("alt+left_square_bracket", "copy_up_left", "Copy above left",
                 show=False, priority=True),
@@ -61,21 +80,38 @@ class TmeldApp(App):
                 show=False, priority=True),
         Binding("alt+apostrophe", "copy_down_right", "Copy below right",
                 show=False, priority=True),
+        Binding("ctrl+k", "next_conflict", "Next conflict", show=False,
+                priority=True),
+        Binding("ctrl+j", "previous_conflict", "Prev conflict", show=False,
+                priority=True),
+        Binding("alt+m", "merge_all", "Merge all", show=False, priority=True),
         Binding("ctrl+s", "save", "Save", priority=True),
         Binding("alt+pagedown", "next_pane", "Next pane", show=False),
         Binding("alt+pageup", "previous_pane", "Prev pane", show=False),
         Binding("ctrl+q", "quit", "Quit", priority=True),
     ]
 
-    def __init__(self, paths: Sequence[str], theme_name: str = DEFAULT_THEME):
+    def __init__(
+        self,
+        paths: Sequence[str],
+        theme_name: str = DEFAULT_THEME,
+        output: Optional[str] = None,
+    ):
         super().__init__()
         self.paths = list(paths)
+        self.output = output
         self.theme_def = THEMES[theme_name]
         self.comparison: Optional[Comparison] = None
         self.panes: List[DiffPane] = []
+        self.gutters: List[ActionGutter] = []
         self.current_chunk = None  # merge-cache index of chunk at cursor
-        self.dirty = [False, False]
+        self.dirty = [False] * len(self.paths)
+        self.merged_saved = False  # 3-way: middle pane saved at least once
         self._rediff_timer = None
+
+    @property
+    def num_panes(self) -> int:
+        return len(self.paths)
 
     def compose(self) -> ComposeResult:
         self.panes = [
@@ -85,20 +121,26 @@ class TmeldApp(App):
                 id=f"pane{i}",
                 read_only=False,
             )
-            for i in range(2)
+            for i in range(self.num_panes)
+        ]
+        self.gutters = [
+            ActionGutter(self.theme_def, id=f"gutter{k}")
+            for k in range(self.num_panes - 1)
         ]
         with Horizontal(id="panes"):
-            yield self.panes[0]
-            yield ActionGutter(self.theme_def, id="gutter")
-            yield self.panes[1]
+            for i, pane in enumerate(self.panes):
+                if i:
+                    yield self.gutters[i - 1]
+                yield pane
             yield ChunkMap(self.theme_def, id="chunkmap")
         yield Footer()
 
     def on_mount(self) -> None:
-        self.comparison = Comparison(self.paths)
-        gutter = self.query_one(ActionGutter)
-        gutter.panes = self.panes
-        gutter.on_push = self._push_chunk
+        self.comparison = Comparison(self.paths, output=self.output)
+        for k, gutter in enumerate(self.gutters):
+            gutter.panes = [self.panes[k], self.panes[k + 1]]
+            gutter.pane_pair = (k, k + 1)
+            gutter.on_push = self._push_chunk
         chunkmap = self.query_one(ChunkMap)
         chunkmap.on_jump = self._jump_to_line
         chunkmap.pane = self.panes[1]
@@ -111,7 +153,7 @@ class TmeldApp(App):
     # --- Styling refresh --------------------------------------------------
 
     def _pane_title(self, i: int) -> str:
-        path = self.paths[i].replace("[", r"\[")
+        path = self.comparison.save_paths[i].replace("[", r"\[")
         if self.dirty[i]:
             return f"{path} [b]*[/b] [reverse b] Save [/reverse b]"
         return path
@@ -119,31 +161,36 @@ class TmeldApp(App):
     def _refresh_styling(self) -> None:
         comparison = self.comparison
         inline = comparison.inline_ranges()
-        pane_chunks = [comparison.pane_chunks(i) for i in range(2)]
         for i, pane in enumerate(self.panes):
             pane.border_title = self._pane_title(i)
             pane.set_chunk_styling(comparison.line_tags(i), inline[i])
         self._apply_emphasis()
-        self.query_one(ActionGutter).set_chunks(pane_chunks)
+        for k, gutter in enumerate(self.gutters):
+            gutter.set_starts(comparison.action_starts(k))
+        mid_chunks = comparison.pane_chunks(1)
         self.query_one(ChunkMap).set_chunks(
-            [(c.tag, c.start_a, c.end_a) for c in pane_chunks[1]],
+            [(c.tag, c.start_a, c.end_a) for c in mid_chunks],
             len(comparison.lines[1]),
         )
         count = comparison.differ.diff_count()
-        self.sub_title = "identical" if count == 0 else f"{count} changes"
+        conflicts = len(comparison.differ.conflicts)
+        subtitle = "identical" if count == 0 else f"{count} changes"
+        if conflicts:
+            subtitle += f", {conflicts} conflicts"
+        self.sub_title = subtitle
 
     # --- Current chunk (Meld: the chunk containing the cursor) ------------
 
     def _apply_emphasis(self) -> None:
         index = self.current_chunk
+        differ = self.comparison.differ
+        in_range = index is not None and 0 <= index < differ.diff_count()
         for i, pane in enumerate(self.panes):
-            if index is None:
-                pane.set_emphasis(())
-                continue
-            chunks = self.comparison.pane_chunks(i)
-            if 0 <= index < len(chunks):
-                c = chunks[index]
-                pane.set_emphasis(range(c.start_a, c.end_a))
+            # Merge-cache indices don't map 1:1 onto per-pane chunk lists
+            # in 3-way; get_chunk orients (or drops) the chunk per pane
+            chunk = differ.get_chunk(index, i) if in_range else None
+            if chunk is not None:
+                pane.set_emphasis(range(chunk.start_a, chunk.end_a))
             else:
                 pane.set_emphasis(())
 
@@ -197,24 +244,37 @@ class TmeldApp(App):
         self._rediff()
         self.comparison.save(i)
         self.dirty[i] = False
+        if i == 1 and self.num_panes == 3:
+            self.merged_saved = True
         self.panes[i].border_title = self._pane_title(i)
-        self.notify(f"Saved {self.paths[i]}", timeout=2)
+        self.notify(f"Saved {self.comparison.save_paths[i]}", timeout=2)
 
     def action_save(self) -> None:
-        focused = self.focused
-        pane = focused if isinstance(focused, DiffPane) else self.panes[0]
-        self.save_pane(pane.pane_index)
+        self.save_pane(self._focused_pane().pane_index)
 
     # --- Chunk actions (ported from filediff.py replace/delete_chunk) -----
 
-    def _chunk_at_cursor(self) -> Optional[int]:
+    def _focused_pane(self) -> DiffPane:
         focused = self.focused
-        pane = focused if isinstance(focused, DiffPane) else self.panes[0]
+        return focused if isinstance(focused, DiffPane) else self.panes[0]
+
+    def _chunk_at_cursor(self) -> Optional[int]:
+        pane = self._focused_pane()
         row = pane.cursor_location[0]
         index, _prev, _next = self.comparison.differ.locate_chunk(
             pane.pane_index, row
         )
         return index
+
+    def _action_panes(self, direction: int, reverse: bool = False):
+        """(src, dst) for a chunk action from the focused pane; the caller
+        validates the range (upstream disables the action instead)."""
+        src = self._focused_pane().pane_index
+        dst = src + direction
+        return (dst, src) if reverse else (src, dst)
+
+    def _valid_pair(self, src: int, dst: int) -> bool:
+        return 0 <= src < self.num_panes and 0 <= dst < self.num_panes
 
     def _replace_lines(
         self, pane: DiffPane, start: int, end: int, new_lines: List[str]
@@ -251,40 +311,37 @@ class TmeldApp(App):
         self._mark_dirty(dst)
         self._rediff()
 
-    def _push_from_focused(self, reverse: bool = False) -> None:
-        focused = self.focused
-        pane = focused if isinstance(focused, DiffPane) else self.panes[0]
-        src = pane.pane_index
-        dst = 1 - src
-        if reverse:
-            src, dst = dst, src
+    def _replace_action(self, src: int, dst: int) -> None:
+        if not self._valid_pair(src, dst):
+            self.bell()
+            return
         index = self._chunk_at_cursor()
         if index is None:
             self.bell()
             return
         self._push_chunk(src, dst, index)
 
+    def _push_action(self, direction: int) -> None:
+        if self.num_panes == 2:
+            # Meld 2-way pushes ignore focus (action_push_change_left/right)
+            src, dst = (0, 1) if direction == PANE_RIGHT else (1, 0)
+        else:
+            src, dst = self._action_panes(direction)
+        self._replace_action(src, dst)
+
     def action_push_right(self) -> None:
-        # Meld semantics: push acts from the focused pane in the pressed
-        # direction; pushing right from the right pane is a no-op bell
-        focused = self.focused
-        if isinstance(focused, DiffPane) and focused.pane_index == 1:
-            self.bell()
-            return
-        self._push_from_focused()
+        self._push_action(PANE_RIGHT)
 
     def action_push_left(self) -> None:
-        focused = self.focused
-        if isinstance(focused, DiffPane) and focused.pane_index == 0:
-            self.bell()
-            return
-        self._push_from_focused()
+        self._push_action(PANE_LEFT)
 
     def action_pull_left(self) -> None:
-        """Pull the current chunk from the other pane into the focused one."""
-        self._push_from_focused(reverse=True)
+        """Pull the current chunk from the left neighbor (Alt+Shift+Right)."""
+        self._replace_action(*self._action_panes(PANE_LEFT, reverse=True))
 
-    action_pull_right = action_pull_left
+    def action_pull_right(self) -> None:
+        """Pull the current chunk from the right neighbor (Alt+Shift+Left)."""
+        self._replace_action(*self._action_panes(PANE_RIGHT, reverse=True))
 
     def _copy_chunk(self, src: int, dst: int, index: int, up: bool) -> None:
         """Port of filediff.copy_chunk: insert without deleting."""
@@ -301,12 +358,10 @@ class TmeldApp(App):
         self._mark_dirty(dst)
         self._rediff()
 
-    def _copy_from_focused(self, dst: int, up: bool) -> None:
-        focused = self.focused
-        pane = focused if isinstance(focused, DiffPane) else self.panes[0]
-        src = pane.pane_index
-        if src == dst:
-            self.bell()  # copying toward the pane you're in is a no-op
+    def _copy_action(self, direction: int, up: bool) -> None:
+        src, dst = self._action_panes(direction)
+        if not self._valid_pair(src, dst):
+            self.bell()
             return
         index = self._chunk_at_cursor()
         if index is None:
@@ -315,20 +370,19 @@ class TmeldApp(App):
         self._copy_chunk(src, dst, index, up)
 
     def action_copy_up_left(self) -> None:
-        self._copy_from_focused(0, up=True)
+        self._copy_action(PANE_LEFT, up=True)
 
     def action_copy_up_right(self) -> None:
-        self._copy_from_focused(1, up=True)
+        self._copy_action(PANE_RIGHT, up=True)
 
     def action_copy_down_left(self) -> None:
-        self._copy_from_focused(0, up=False)
+        self._copy_action(PANE_LEFT, up=False)
 
     def action_copy_down_right(self) -> None:
-        self._copy_from_focused(1, up=False)
+        self._copy_action(PANE_RIGHT, up=False)
 
     def action_delete_chunk(self) -> None:
-        focused = self.focused
-        pane = focused if isinstance(focused, DiffPane) else self.panes[0]
+        pane = self._focused_pane()
         index = self._chunk_at_cursor()
         if index is None:
             self.bell()
@@ -341,28 +395,54 @@ class TmeldApp(App):
         self._mark_dirty(pane.pane_index)
         self._rediff()
 
+    def action_merge_all(self) -> None:
+        """3-way: merge every non-conflicting chunk into the middle pane."""
+        if self.num_panes != 3:
+            self.bell()
+            return
+        merged = self.comparison.merge_all_non_conflicting()
+        if merged.split("\n") == self.comparison.lines[1]:
+            self.bell()  # nothing mergeable
+            return
+        pane = self.panes[1]
+        # replace (not load_text) so the merge stays undoable
+        pane.replace(merged, (0, 0), pane.document.end)
+        self._mark_dirty(1)
+        self._rediff()
+
     # --- Synchronized scrolling (PARITY.md §4) ----------------------------
 
     def on_diff_pane_scrolled(self, message: DiffPane.Scrolled) -> None:
-        self.query_one(ActionGutter).refresh()
+        for gutter in self.gutters:
+            gutter.refresh()
         self.query_one(ChunkMap).refresh()
         if self.comparison is None:
             return
         master = message.pane.pane_index
-        other = 1 - master
-        master_pane, other_pane = self.panes[master], self.panes[other]
+        master_pane = self.panes[master]
         page = master_pane.scrollable_content_region.height or 1
-        target = sync_scroll_target(
-            message.value,
-            page,
-            len(self.comparison.lines[master]),
-            other_pane.scrollable_content_region.height or 1,
-            len(self.comparison.lines[other]),
-            self.comparison.pair_chunks(master, other),
-        )
-        # Echo suppression lives in sync_scroll_to (the Scrolled message
-        # arrives async, so a flag around this call can't guard the loop)
-        other_pane.sync_scroll_to(target)
+        totals = [len(lines) for lines in self.comparison.lines]
+        syncpoint = calc_syncpoint(message.value, page, totals[master])
+        target_line = message.value + page * syncpoint
+        # 3-way influence cascades through the middle pane: once pane 1
+        # is synced it becomes the master (upstream _sync_vscroll)
+        for i in SCROLL_INFLUENCE[self.num_panes][master]:
+            other_pane = self.panes[i]
+            other_page = other_pane.scrollable_content_region.height or 1
+            other_line = interpolate_line(
+                target_line,
+                totals[master],
+                totals[i],
+                self.comparison.pair_chunks(master, i),
+            )
+            # Echo suppression lives in sync_scroll_to (the Scrolled
+            # message arrives async, so a flag around this call can't
+            # guard the loop)
+            other_pane.sync_scroll_to(
+                scroll_offset_for_line(other_line, other_page, totals[i], syncpoint)
+            )
+            if i == 1:
+                master, target_line = 1, other_line
 
     # --- Navigation ---------------------------------------------------------
 
@@ -376,9 +456,16 @@ class TmeldApp(App):
         if comparison is None or not (0 <= index < comparison.differ.diff_count()):
             self.bell()
             return
-        focused = self.focused
-        pane = focused if isinstance(focused, DiffPane) else self.panes[0]
-        chunk = comparison.pane_chunks(pane.pane_index)[index]
+        pane = self._focused_pane()
+        chunk = comparison.differ.get_chunk(index, pane.pane_index)
+        if chunk is None:
+            # Chunk doesn't touch the focused pane (3-way): follow it in
+            # the middle pane, which is part of every chunk
+            pane = self.panes[1]
+            chunk = comparison.differ.get_chunk(index, 1)
+            if chunk is None:
+                self.bell()
+                return
         page = pane.scrollable_content_region.height or 1
         target = max(0, chunk.start_a - page // 2)
         pane.scroll_to(y=target, animate=False)
@@ -389,8 +476,7 @@ class TmeldApp(App):
 
         locate_chunk gives (current, previous, next); which is 1 or 2.
         """
-        focused = self.focused
-        pane = focused if isinstance(focused, DiffPane) else self.panes[0]
+        pane = self._focused_pane()
         row = pane.cursor_location[0]
         located = self.comparison.differ.locate_chunk(pane.pane_index, row)
         target = located[which]
@@ -405,17 +491,62 @@ class TmeldApp(App):
     def action_previous_chunk(self) -> None:
         self._nav_chunk(1)
 
-    def action_next_pane(self) -> None:
-        self.panes[1 if self.focused is self.panes[0] else 0].focus()
+    def _nav_conflict(self, forward: bool) -> None:
+        """Next/prev conflict relative to the cursor (Meld Ctrl+K/Ctrl+J).
 
-    action_previous_pane = action_next_pane
+        Conflict chunks always involve the middle pane, so they exist in
+        every pane's line cache; upstream picks the first conflict >= the
+        next chunk / last conflict <= the previous chunk (filediff.py:683).
+        """
+        pane = self._focused_pane()
+        row = pane.cursor_location[0]
+        _cur, prev, next_ = self.comparison.differ.locate_chunk(
+            pane.pane_index, row
+        )
+        conflicts = self.comparison.differ.conflicts
+        target = None
+        if forward and next_ is not None:
+            target = next((c for c in conflicts if c >= next_), None)
+        elif not forward and prev is not None:
+            target = next((c for c in reversed(conflicts) if c <= prev), None)
+        if target is None:
+            self.bell()
+        else:
+            self._go_to_chunk(target)
+
+    def action_next_conflict(self) -> None:
+        self._nav_conflict(forward=True)
+
+    def action_previous_conflict(self) -> None:
+        self._nav_conflict(forward=False)
+
+    def action_next_pane(self) -> None:
+        current = self._focused_pane().pane_index
+        self.panes[(current + 1) % self.num_panes].focus()
+
+    def action_previous_pane(self) -> None:
+        current = self._focused_pane().pane_index
+        self.panes[(current - 1) % self.num_panes].focus()
+
+    def exit_status(self) -> int:
+        """Mergetool contract: 3-way succeeds only if the merge was saved."""
+        if self.num_panes == 3:
+            return 0 if self.merged_saved else 1
+        return 0
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         prog="tmeld", description="Meld, in your terminal"
     )
-    parser.add_argument("files", nargs=2, help="two files to compare")
+    parser.add_argument(
+        "files", nargs="+",
+        help="two or three files to compare (3-way: LOCAL MERGED REMOTE)",
+    )
+    parser.add_argument(
+        "-o", "--output", metavar="FILE",
+        help="write middle-pane saves to FILE (3-way only, like meld -o)",
+    )
     parser.add_argument(
         "--theme", choices=sorted(THEMES), default=DEFAULT_THEME
     )
@@ -424,9 +555,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    app = TmeldApp(args.files, theme_name=args.theme)
+    if len(args.files) not in (2, 3):
+        parser.error("expected 2 or 3 files")
+    if args.output and len(args.files) != 3:
+        parser.error("--output requires a 3-way comparison")
+
+    app = TmeldApp(args.files, theme_name=args.theme, output=args.output)
     app.run()
-    return 0
+    return app.exit_status()
 
 
 if __name__ == "__main__":

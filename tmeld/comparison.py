@@ -5,9 +5,10 @@ inline_ranges dictionaries produced here; tags and chunk boundaries come
 straight from the vendored Meld engine.
 """
 
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
-from tmeld._vendor.meld.matchers.diffutil import Differ
+from tmeld._vendor.meld.matchers.diffutil import Differ, opcode_reverse
+from tmeld._vendor.meld.matchers.merge import Merger
 from tmeld._vendor.meld.matchers.myers import InlineMyersSequenceMatcher
 
 # Skip inline highlighting for pathological chunks, as Meld does (it uses
@@ -23,17 +24,24 @@ def read_text(path: str) -> str:
 
 
 class Comparison:
-    """A 2-way (later 3-way) comparison of in-memory line sequences.
+    """A 2- or 3-way comparison of in-memory line sequences.
 
     Lines are mutable: the UI updates them on edits and calls recompute()
     to rebuild the chunk model (a fresh matcher run — identical chunks to
     Meld's incremental change_sequence path, which can replace this later
     for very large files).
+
+    output, if given, redirects saves of the middle pane (Meld's -o: the
+    git mergetool convention is `tmeld $LOCAL $MERGED $REMOTE`, where the
+    middle pane IS the merged file).
     """
 
-    def __init__(self, paths: Sequence[str]):
-        assert len(paths) == 2, "3-way arrives in Phase 5"
+    def __init__(self, paths: Sequence[str], output: Optional[str] = None):
+        assert len(paths) in (2, 3)
         self.paths = list(paths)
+        self.save_paths = list(paths)
+        if output is not None:
+            self.save_paths[1] = output
         texts = [read_text(p) for p in paths]
         self.lines: List[List[str]] = [t.splitlines() for t in texts]
         # Preserve on save; empty files count as newline-terminated
@@ -51,7 +59,7 @@ class Comparison:
         text = "\n".join(self.lines[pane])
         if self.trailing_newline[pane] and text:
             text += "\n"
-        with open(self.paths[pane], "w", encoding="utf-8", newline="") as f:
+        with open(self.save_paths[pane], "w", encoding="utf-8", newline="") as f:
             f.write(text)
 
     @property
@@ -82,24 +90,73 @@ class Comparison:
         opcode ranges on both panes.
         """
         per_pane: List[InlineRanges] = [{} for _ in range(self.num_panes)]
-        # Stored chunks: a-side is pane 1, b-side is pane 0
-        for c0, _c1 in self.differ.all_changes():
-            chunk = c0
-            if chunk is None or chunk.tag != "replace":
-                continue
-            a_lines = self.lines[1][chunk.start_a:chunk.end_a]
-            b_lines = self.lines[0][chunk.start_b:chunk.end_b]
-            text_a = "\n".join(a_lines)
-            text_b = "\n".join(b_lines)
-            if len(text_a) + len(text_b) > INLINE_CHAR_CAP:
-                continue
-            matcher = InlineMyersSequenceMatcher(None, text_a, text_b)
-            for tag, i1, i2, j1, j2 in matcher.get_opcodes():
-                if tag == "equal":
+        # Each stored diff pairs the middle sequence (the chunk's a-side)
+        # with an outer pane on the b-side: seq 0 <-> pane 0, seq 1 <-> pane 2.
+        # For 2-way the merge cache is [(chunk, None)] so only seq 0 runs.
+        for merged in self.differ.all_changes():
+            for seq, chunk in enumerate(merged):
+                if chunk is None or chunk.tag != "replace":
                     continue
-                _add_char_range(per_pane[1], a_lines, chunk.start_a, i1, i2)
-                _add_char_range(per_pane[0], b_lines, chunk.start_b, j1, j2)
+                b_pane = 0 if seq == 0 else 2
+                a_lines = self.lines[1][chunk.start_a:chunk.end_a]
+                b_lines = self.lines[b_pane][chunk.start_b:chunk.end_b]
+                text_a = "\n".join(a_lines)
+                text_b = "\n".join(b_lines)
+                if len(text_a) + len(text_b) > INLINE_CHAR_CAP:
+                    continue
+                matcher = InlineMyersSequenceMatcher(None, text_a, text_b)
+                for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+                    if tag == "equal":
+                        continue
+                    _add_char_range(per_pane[1], a_lines, chunk.start_a, i1, i2)
+                    _add_char_range(
+                        per_pane[b_pane], b_lines, chunk.start_b, j1, j2
+                    )
         return per_pane
+
+    def action_starts(
+        self, pair_index: int
+    ) -> List[Dict[int, Tuple[int, str]]]:
+        """Per-column {start_line: (merge_index, tag)} for the action
+        gutter between panes pair_index and pair_index + 1.
+
+        Column 0 is the pair's left pane; tags are oriented to each
+        column's own pane. Entries exist only where that side has lines
+        to push (start != end).
+        """
+        # Which column shows the middle sequence (the chunk a-side):
+        # pair (0,1) -> the right column; pair (1,2) -> the left column.
+        # 2-way sequences are [left, right] with pane 1 as the a-side,
+        # so the same formula covers it.
+        a_col = 1 - pair_index
+        starts: List[Dict[int, Tuple[int, str]]] = [{}, {}]
+        for index, merged in enumerate(self.differ.all_changes()):
+            chunk = merged[pair_index]
+            if chunk is None:
+                continue
+            if chunk.start_a != chunk.end_a:
+                starts[a_col][chunk.start_a] = (index, chunk.tag)
+            if chunk.start_b != chunk.end_b:
+                starts[1 - a_col][chunk.start_b] = (
+                    index,
+                    opcode_reverse[chunk.tag],
+                )
+        return starts
+
+    def merge_all_non_conflicting(self) -> str:
+        """3-way: middle text with every non-conflict chunk merged in.
+
+        Port of upstream filediff.action_merge_all_changes — a Merger
+        driven by the live Differ; conflicts keep the base (middle) text.
+        """
+        assert self.num_panes == 3
+        merger = Merger()
+        merger.differ = self.differ
+        merger.texts = self.lines
+        merged = None
+        for merged in merger.merge_3_files(mark_conflicts=False):
+            pass
+        return merged
 
 
 def _add_char_range(

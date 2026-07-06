@@ -38,27 +38,19 @@ def calc_syncpoint(value: float, page_size: float, upper: float) -> float:
     return syncpoint
 
 
-def sync_scroll_target(
-    master_value: float,
-    master_page: float,
+def interpolate_line(
+    target_line: float,
     master_total: int,
-    other_page: float,
     other_total: int,
     pair_chunks: Iterable[Tuple],
-) -> int:
-    """Compute the other pane's scroll offset for a master pane position.
+) -> float:
+    """Map a fractional master-pane line to the other pane's line.
 
+    Finds the chunk, or more commonly the space between chunks, that
+    contains the target line, and interpolates within that interval.
     pair_chunks are DiffChunks oriented master->other (i.e. start_a/end_a
     in master-pane lines), as yielded by Differ.pair_changes(master, other).
     """
-    syncpoint = calc_syncpoint(master_value, master_page, master_total)
-
-    # Sync point in buffer coords; usually the middle of the screen,
-    # except at the top and bottom of the document.
-    target_line = master_value + master_page * syncpoint
-
-    # Find the chunk, or more commonly the space between chunks, that
-    # contains the target line, and interpolate within that interval.
     mbegin, mend = 0, master_total
     obegin, oend = 0, other_total
     for chunk in pair_chunks:
@@ -75,9 +67,40 @@ def sync_scroll_target(
             obegin = chunk.end_b
 
     fraction = (target_line - mbegin) / ((mend - mbegin) or 1)
-    other_line = obegin + fraction * (oend - obegin)
+    return obegin + fraction * (oend - obegin)
 
+
+def scroll_offset_for_line(
+    other_line: float, other_page: float, other_total: int, syncpoint: float
+) -> int:
+    """Scroll offset that places other_line at the viewport's syncpoint."""
     val = other_line - other_page * syncpoint
     max_scroll = max(0.0, other_total - other_page)
     val = min(max(val, 0.0), max_scroll)
     return math.floor(val)
+
+
+def sync_scroll_target(
+    master_value: float,
+    master_page: float,
+    master_total: int,
+    other_page: float,
+    other_total: int,
+    pair_chunks: Iterable[Tuple],
+) -> int:
+    """Compute the other pane's scroll offset for a master pane position.
+
+    Single-pair convenience over calc_syncpoint + interpolate_line; the
+    3-way influence cascade in the app uses the pieces directly because
+    re-mastering through the middle pane needs the fractional line.
+    """
+    syncpoint = calc_syncpoint(master_value, master_page, master_total)
+
+    # Sync point in buffer coords; usually the middle of the screen,
+    # except at the top and bottom of the document.
+    target_line = master_value + master_page * syncpoint
+
+    other_line = interpolate_line(
+        target_line, master_total, other_total, pair_chunks
+    )
+    return scroll_offset_for_line(other_line, other_page, other_total, syncpoint)
