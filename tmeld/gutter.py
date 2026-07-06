@@ -59,18 +59,28 @@ class ActionGutter(Widget):
         return y + int(pane.scroll_offset.y) - PANE_BORDER_ROWS
 
     def render_line(self, y: int) -> Strip:
+        # The gutter sits between the white pages of the panes: paint it
+        # to match, or arrows drown in the app's dark background
+        page = Style(bgcolor=self.theme_def.page_bg)
         if len(self.panes) != 2:
-            return Strip.blank(self.size.width)
+            return Strip.blank(self.size.width, page)
         segments = []
         for col in (0, 1):
             entry = self._starts[col].get(self._doc_line(col, y))
             if entry is None:
-                segments.append(Segment(" "))
+                segments.append(Segment(" ", page))
             else:
                 _index, tag = entry
                 chunk_style = self.theme_def.chunk.get(tag)
-                fg = chunk_style.fg if chunk_style else None
-                segments.append(Segment(self.ARROWS[col], Style(color=fg)))
+                if chunk_style is None:
+                    style = page
+                else:
+                    # GTK's action gutter draws the arrow on the chunk's
+                    # pale fill — visible and color-codes the action
+                    style = Style(
+                        color=chunk_style.fg, bgcolor=chunk_style.fill, bold=True
+                    )
+                segments.append(Segment(self.ARROWS[col], style))
         return Strip(segments)
 
     def on_click(self, event: events.Click) -> None:

@@ -46,8 +46,10 @@ def test_cursor_on_changed_line_keeps_chunk_background(paths):
             return app.export_screenshot().upper()
 
     svg = run(scenario())
-    # Chunk fill still visible under the cursor line
-    assert "BDDDFF" in svg
+    # Chunk fill must survive in BOTH panes — the cursor sits on the
+    # changed line in pane 0, so one occurrence per pane is required
+    # (a single occurrence means the cursor line got wiped)
+    assert svg.count("BDDDFF") >= 2
     # Line-number highlight (Meld current-line tint) present
     assert "FFFFBF" in svg
 
@@ -66,6 +68,28 @@ def test_pane_text_is_readable_on_light_page(paths):
     fg, bg = run(scenario())
     assert fg == "#000000"
     assert bg == "#ffffff"
+
+
+def test_gutter_arrows_visible_on_page_background(paths):
+    files = paths(["a", "NEW", "c"], ["a", "old", "c"])
+
+    async def scenario():
+        app = TmeldApp(files)
+        async with app.run_test(size=(100, 24)) as pilot:
+            await pilot.pause()
+            gutter = app.query_one(ActionGutter)
+            arrow_row = gutter.render_line(2)  # chunk at doc line 1 + border
+            blank_row = gutter.render_line(5)
+            arrow_seg = list(arrow_row)[0]
+            blank_seg = list(blank_row)[0]
+            return (
+                arrow_seg.style.bgcolor.name,
+                blank_seg.style.bgcolor.name,
+            )
+
+    arrow_bg, blank_bg = run(scenario())
+    assert arrow_bg == "#bdddff"  # replace chunk fill behind the arrow
+    assert blank_bg == "#ffffff"  # gutter matches the page, not app dark
 
 
 def test_push_clears_highlight_in_both_panes(paths):

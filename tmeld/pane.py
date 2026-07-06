@@ -26,7 +26,7 @@ def build_textarea_theme(theme_def: Theme) -> TextAreaTheme:
     cursor lands on them. Instead the current line's *number* gets
     Meld's current-line tint (user feedback from the first test drive).
     """
-    return TextAreaTheme(
+    theme = TextAreaTheme(
         name=f"tmeld-{theme_def.name}",
         base_style=Style(color=theme_def.text_fg, bgcolor=theme_def.page_bg),
         gutter_style=Style(color=theme_def.unknown_fg, bgcolor=theme_def.page_bg),
@@ -41,6 +41,14 @@ def build_textarea_theme(theme_def: Theme) -> TextAreaTheme:
             color=theme_def.selection_fg, bgcolor=theme_def.selection_bg
         ),
     )
+    # apply_css() backfills every *non-configured* attribute from CSS on
+    # each render, and __post_init__ only marks non-None fields as
+    # configured — so our deliberate None above would be replaced by the
+    # `.text-area--cursor-line { background: $boost }` component style,
+    # wiping chunk backgrounds under the cursor. Mark it configured so
+    # None sticks. (Private API; textual pinned <9.)
+    theme._theme_configured_attributes.add("cursor_line_style")
+    return theme
 
 
 class DiffPane(TextArea):

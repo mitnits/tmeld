@@ -48,7 +48,9 @@ class ChunkMap(Widget):
                 tag = chunk_tag
                 break
         if tag is None or tag not in self.theme_def.chunk:
-            return Strip.blank(self.size.width)
+            return Strip.blank(
+                self.size.width, Style(bgcolor=self.theme_def.page_bg)
+            )
         style = Style(bgcolor=self.theme_def.chunk[tag].line)
         return Strip([Segment(" " * self.size.width, style)])
 
