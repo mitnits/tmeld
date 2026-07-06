@@ -12,6 +12,22 @@ from dataclasses import dataclass
 from typing import Dict, Optional
 
 
+def blend(base: str, over: str, alpha: float) -> str:
+    """Pre-composite `over` at `alpha` onto opaque `base` (both #rrggbb).
+
+    Terminals have no alpha channel, so every rgba() from the GTK schemes
+    is blended at theme-load time against its actual backdrop.
+    """
+    b = int(base[1:], 16)
+    o = int(over[1:], 16)
+    out = 0
+    for shift in (16, 8, 0):
+        bc = (b >> shift) & 0xFF
+        oc = (o >> shift) & 0xFF
+        out |= round(bc + (oc - bc) * alpha) << shift
+    return f"#{out:06x}"
+
+
 @dataclass(frozen=True)
 class ChunkStyle:
     fg: str       # tree-state text color (PARITY.md §2)
@@ -34,6 +50,21 @@ class Theme:
     text_fg: str = "#000000"
     selection_fg: str = "#ffffff"
     selection_bg: str = "#3584e4"
+    # meld:current-chunk-highlight — white at alpha, composited over fills
+    emphasis_color: str = "#ffffff"
+    emphasis_alpha: float = 0.5
+    # map-overlay rgba(100,100,100,0.4) — composited over map cells
+    overlay_color: str = "#646464"
+    overlay_alpha: float = 0.4
+
+    def chunk_fill(self, tag: str, emphasized: bool = False) -> str:
+        fill = self.chunk[tag].fill
+        if emphasized:
+            fill = blend(fill, self.emphasis_color, self.emphasis_alpha)
+        return fill
+
+    def overlay(self, base: str) -> str:
+        return blend(base, self.overlay_color, self.overlay_alpha)
 
 
 MELD_BASE = Theme(
@@ -83,6 +114,10 @@ MELD_DARK = Theme(
     text_fg="#839496",
     selection_fg="#93a1a1",
     selection_bg="#073642",
+    # rgba(255,255,255,0.06) in the dark scheme
+    emphasis_alpha=0.06,
+    # map-overlay rgba(200,200,200,0.4) in the dark scheme
+    overlay_color="#c8c8c8",
 )
 
 THEMES = {t.name: t for t in (MELD_BASE, MELD_DARK)}

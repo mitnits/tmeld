@@ -59,7 +59,15 @@ phase plan; this file holds working context that isn't in the plan.
   with clickable push arrows, ChunkMap click-to-jump, ctrl+shift+z redo,
   Ctrl+Q quit ('q' types now). Dirty semantics: text diverged from
   comparison.lines, OR set explicitly by chunk actions.
-- Awaiting user's hands-on verdict from Mac/iTerm2 (scroll feel, colors,
-  mouse). Phase 4 (linkmap connectors) or Phase 2/3 polish next:
-  current-chunk emphasis, chunk boundary lines (underline approx),
-  ChunkMap viewport indicator, copy-above/below actions (Alt+[ ] ; ').
+- User verdict rounds 1-5: works great incl. gnome-terminal (Tier 1
+  portability confirmed). Fixed along the way: cursor-line wipe (3 tries
+  — see pane._set_theme override), unreadable fg, stale line-cache
+  highlights, sync-scroll jitter (async echo — see sync_scroll_to),
+  gutter redesign to user's 3-col divider spec ('▶ │' / '│ ◀' / '▶ ◀').
+  Save button lives in the dirty pane's title row (click = save).
+  v0.1.0 tag = user-validated high-water mark.
+- Phase 2/3 polish done: current-chunk emphasis (cursor-driven, blended
+  fills via palette.blend), locate_chunk-based nav (cursor-relative like
+  Meld), copy-above/below (Alt+[ ] ; '), ChunkMap viewport indicator.
+- Still open: chunk boundary lines (underline approx), Phase 4 linkmap,
+  Phase 5 three-way, Phase 6 dirdiff, Phase 7 VC view, Phase 8 graphics.

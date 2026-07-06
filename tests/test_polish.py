@@ -48,8 +48,10 @@ def test_cursor_on_changed_line_keeps_chunk_background(paths):
     svg = run(scenario())
     # Chunk fill must survive in BOTH panes — the cursor sits on the
     # changed line in pane 0, so one occurrence per pane is required
-    # (a single occurrence means the cursor line got wiped)
-    assert svg.count("BDDDFF") >= 2
+    # (a single occurrence means the cursor line got wiped). With the
+    # cursor inside the chunk it is the *current* chunk, so the fill is
+    # the emphasized variant (replace fill blended toward white).
+    assert svg.count("DEEEFF") >= 2
     # Line-number highlight (Meld current-line tint) present
     assert "FFFFBF" in svg
 

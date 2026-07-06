@@ -53,6 +53,14 @@ class TmeldApp(App):
         Binding("alt+shift+right", "pull_left", "Pull from right", priority=True),
         Binding("alt+shift+left", "pull_right", "Pull from left", priority=True),
         Binding("alt+delete", "delete_chunk", "Delete", priority=True),
+        Binding("alt+left_square_bracket", "copy_up_left", "Copy above left",
+                show=False, priority=True),
+        Binding("alt+right_square_bracket", "copy_up_right", "Copy above right",
+                show=False, priority=True),
+        Binding("alt+semicolon", "copy_down_left", "Copy below left",
+                show=False, priority=True),
+        Binding("alt+apostrophe", "copy_down_right", "Copy below right",
+                show=False, priority=True),
         Binding("ctrl+s", "save", "Save", priority=True),
         Binding("alt+pagedown", "next_pane", "Next pane", show=False),
         Binding("alt+pageup", "previous_pane", "Prev pane", show=False),
@@ -65,7 +73,7 @@ class TmeldApp(App):
         self.theme_def = THEMES[theme_name]
         self.comparison: Optional[Comparison] = None
         self.panes: List[DiffPane] = []
-        self.current_chunk = -1
+        self.current_chunk = None  # merge-cache index of chunk at cursor
         self.dirty = [False, False]
         self._rediff_timer = None
 
@@ -93,6 +101,7 @@ class TmeldApp(App):
         gutter.on_push = self._push_chunk
         chunkmap = self.query_one(ChunkMap)
         chunkmap.on_jump = self._jump_to_line
+        chunkmap.pane = self.panes[1]
         for i, pane in enumerate(self.panes):
             pane.load_text("\n".join(self.comparison.lines[i]))
             self.dirty[i] = False
@@ -114,6 +123,7 @@ class TmeldApp(App):
         for i, pane in enumerate(self.panes):
             pane.border_title = self._pane_title(i)
             pane.set_chunk_styling(comparison.line_tags(i), inline[i])
+        self._apply_emphasis()
         self.query_one(ActionGutter).set_chunks(pane_chunks)
         self.query_one(ChunkMap).set_chunks(
             [(c.tag, c.start_a, c.end_a) for c in pane_chunks[1]],
@@ -121,6 +131,35 @@ class TmeldApp(App):
         )
         count = comparison.differ.diff_count()
         self.sub_title = "identical" if count == 0 else f"{count} changes"
+
+    # --- Current chunk (Meld: the chunk containing the cursor) ------------
+
+    def _apply_emphasis(self) -> None:
+        index = self.current_chunk
+        for i, pane in enumerate(self.panes):
+            if index is None:
+                pane.set_emphasis(())
+                continue
+            chunks = self.comparison.pane_chunks(i)
+            if 0 <= index < len(chunks):
+                c = chunks[index]
+                pane.set_emphasis(range(c.start_a, c.end_a))
+            else:
+                pane.set_emphasis(())
+
+    def on_text_area_selection_changed(
+        self, event: TextArea.SelectionChanged
+    ) -> None:
+        pane = event.text_area
+        if not isinstance(pane, DiffPane) or self.comparison is None:
+            return
+        row = event.selection.end[0]
+        index, _prev, _next = self.comparison.differ.locate_chunk(
+            pane.pane_index, row
+        )
+        if index != self.current_chunk:
+            self.current_chunk = index
+            self._apply_emphasis()
 
     # --- Editing / re-diff ------------------------------------------------
 
@@ -247,6 +286,46 @@ class TmeldApp(App):
 
     action_pull_right = action_pull_left
 
+    def _copy_chunk(self, src: int, dst: int, index: int, up: bool) -> None:
+        """Port of filediff.copy_chunk: insert without deleting."""
+        chunk = self.comparison.differ.get_chunk(index, src, dst)
+        if chunk is None:
+            self.bell()
+            return
+        src_lines = self.comparison.lines[src][chunk.start_a:chunk.end_a]
+        if not src_lines:
+            self.bell()
+            return
+        at = chunk.start_b if up else chunk.end_b
+        self._replace_lines(self.panes[dst], at, at, src_lines)
+        self._mark_dirty(dst)
+        self._rediff()
+
+    def _copy_from_focused(self, dst: int, up: bool) -> None:
+        focused = self.focused
+        pane = focused if isinstance(focused, DiffPane) else self.panes[0]
+        src = pane.pane_index
+        if src == dst:
+            self.bell()  # copying toward the pane you're in is a no-op
+            return
+        index = self._chunk_at_cursor()
+        if index is None:
+            self.bell()
+            return
+        self._copy_chunk(src, dst, index, up)
+
+    def action_copy_up_left(self) -> None:
+        self._copy_from_focused(0, up=True)
+
+    def action_copy_up_right(self) -> None:
+        self._copy_from_focused(1, up=True)
+
+    def action_copy_down_left(self) -> None:
+        self._copy_from_focused(0, up=False)
+
+    def action_copy_down_right(self) -> None:
+        self._copy_from_focused(1, up=False)
+
     def action_delete_chunk(self) -> None:
         focused = self.focused
         pane = focused if isinstance(focused, DiffPane) else self.panes[0]
@@ -266,6 +345,7 @@ class TmeldApp(App):
 
     def on_diff_pane_scrolled(self, message: DiffPane.Scrolled) -> None:
         self.query_one(ActionGutter).refresh()
+        self.query_one(ChunkMap).refresh()
         if self.comparison is None:
             return
         master = message.pane.pane_index
@@ -296,7 +376,6 @@ class TmeldApp(App):
         if comparison is None or not (0 <= index < comparison.differ.diff_count()):
             self.bell()
             return
-        self.current_chunk = index
         focused = self.focused
         pane = focused if isinstance(focused, DiffPane) else self.panes[0]
         chunk = comparison.pane_chunks(pane.pane_index)[index]
@@ -305,11 +384,26 @@ class TmeldApp(App):
         pane.scroll_to(y=target, animate=False)
         pane.move_cursor((chunk.start_a, 0))
 
+    def _nav_chunk(self, which: int) -> None:
+        """Meld semantics: next/prev relative to the cursor's line.
+
+        locate_chunk gives (current, previous, next); which is 1 or 2.
+        """
+        focused = self.focused
+        pane = focused if isinstance(focused, DiffPane) else self.panes[0]
+        row = pane.cursor_location[0]
+        located = self.comparison.differ.locate_chunk(pane.pane_index, row)
+        target = located[which]
+        if target is None:
+            self.bell()
+        else:
+            self._go_to_chunk(target)
+
     def action_next_chunk(self) -> None:
-        self._go_to_chunk(self.current_chunk + 1)
+        self._nav_chunk(2)
 
     def action_previous_chunk(self) -> None:
-        self._go_to_chunk(max(self.current_chunk - 1, 0))
+        self._nav_chunk(1)
 
     def action_next_pane(self) -> None:
         self.panes[1 if self.focused is self.panes[0] else 0].focus()

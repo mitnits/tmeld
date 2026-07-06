@@ -67,6 +67,8 @@ class DiffPane(TextArea):
         self.pane_index = pane_index
         self.theme_def = theme_def
         self._line_styles: Dict[int, Style] = {}
+        self._line_tags: Dict[int, str] = {}
+        self._emphasized: set = set()
         self._inline_styles: Dict[int, List[Tuple[int, int]]] = {}
         self._inline_style = Style(bgcolor=theme_def.inline_bg)
         ta_theme = build_textarea_theme(theme_def)
@@ -94,15 +96,29 @@ class DiffPane(TextArea):
         line_tags: Dict[int, str],
         inline_ranges: Dict[int, List[Tuple[int, int]]],
     ) -> None:
-        chunk = self.theme_def.chunk
+        self._line_tags = dict(line_tags)
+        self._inline_styles = inline_ranges
+        self._rebuild_line_styles()
+
+    def set_emphasis(self, emphasized_lines) -> None:
+        """Mark the current chunk's lines (Meld current-chunk-highlight)."""
+        emphasized = set(emphasized_lines)
+        if emphasized == self._emphasized:
+            return
+        self._emphasized = emphasized
+        self._rebuild_line_styles()
+
+    def _rebuild_line_styles(self) -> None:
+        theme = self.theme_def
         # Row fill uses the pale scheme "background" — the saturated
         # "line-background" is only for chunk boundary lines in GTK Meld
         self._line_styles = {
-            line: Style(bgcolor=chunk[tag].fill)
-            for line, tag in line_tags.items()
-            if tag in chunk
+            line: Style(
+                bgcolor=theme.chunk_fill(tag, emphasized=line in self._emphasized)
+            )
+            for line, tag in self._line_tags.items()
+            if tag in theme.chunk
         }
-        self._inline_styles = inline_ranges
         # TextArea caches rendered strips keyed on text/selection state
         # only — our chunk styling isn't in the key, so stale highlights
         # survive a re-diff unless we drop the cache (textual pinned <9)

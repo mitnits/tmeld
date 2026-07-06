@@ -29,11 +29,22 @@ class ChunkMap(Widget):
         self.theme_def = theme_def
         self._chunks: List[Tuple[str, int, int]] = []  # (tag, start, end)
         self._total_lines = 1
+        self.pane = None  # DiffPane whose viewport is indicated (set by app)
 
     def set_chunks(self, chunks: List[Tuple[str, int, int]], total: int) -> None:
         self._chunks = chunks
         self._total_lines = max(total, 1)
         self.refresh()
+
+    def _viewport_rows(self, height: int) -> Tuple[float, float]:
+        pane = self.pane
+        if pane is None:
+            return (-1.0, -1.0)
+        scroll = float(pane.scroll_offset.y)
+        page = pane.scrollable_content_region.height or 1
+        top = scroll * height / self._total_lines
+        bottom = (scroll + page) * height / self._total_lines
+        return top, max(bottom, top + 1)
 
     def render_line(self, y: int) -> Strip:
         height = max(self.size.height, 1)
@@ -47,12 +58,15 @@ class ChunkMap(Widget):
             if start < row_end and end > row_start:
                 tag = chunk_tag
                 break
-        if tag is None or tag not in self.theme_def.chunk:
-            return Strip.blank(
-                self.size.width, Style(bgcolor=self.theme_def.page_bg)
-            )
-        style = Style(bgcolor=self.theme_def.chunk[tag].line)
-        return Strip([Segment(" " * self.size.width, style)])
+        if tag is not None and tag in self.theme_def.chunk:
+            color = self.theme_def.chunk[tag].line
+        else:
+            color = self.theme_def.page_bg
+        # Meld's map-overlay marks the visible region
+        view_top, view_bottom = self._viewport_rows(height)
+        if view_top <= y < view_bottom:
+            color = self.theme_def.overlay(color)
+        return Strip([Segment(" " * self.size.width, Style(bgcolor=color))])
 
     def on_click(self, event: events.Click) -> None:
         if self.on_jump is None:
