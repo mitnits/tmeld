@@ -52,6 +52,14 @@ phase plan; this file holds working context that isn't in the plan.
   chunk row); delete fills aliased to insert (one-sided lines = green).
 - Both machines have editable installs: .venv locally, ~/tmeld/.venv on
   mini. Screenshot generator: spikes/screenshot.py -> docs/screenshot.svg.
-- Phase 3 next (editing + chunk actions) per PLAN.md. Also pending from
-  Phase 2 polish: current-chunk emphasis, chunk boundary line rendering,
-  viewport indicator on ChunkMap, snapshot tests.
+- Phase 3 done: panes editable (debounced re-diff, dirty markers, Ctrl+S
+  save preserving trailing newline), chunk actions ported from
+  filediff.py (push Alt+Left/Right, pull Alt+Shift+arrows, delete
+  Alt+Delete, EOF newline splice handled), ActionGutter between panes
+  with clickable push arrows, ChunkMap click-to-jump, ctrl+shift+z redo,
+  Ctrl+Q quit ('q' types now). Dirty semantics: text diverged from
+  comparison.lines, OR set explicitly by chunk actions.
+- Awaiting user's hands-on verdict from Mac/iTerm2 (scroll feel, colors,
+  mouse). Phase 4 (linkmap connectors) or Phase 2/3 polish next:
+  current-chunk emphasis, chunk boundary lines (underline approx),
+  ChunkMap viewport indicator, copy-above/below actions (Alt+[ ] ; ').
