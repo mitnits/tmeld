@@ -41,13 +41,6 @@ def build_textarea_theme(theme_def: Theme) -> TextAreaTheme:
             color=theme_def.selection_fg, bgcolor=theme_def.selection_bg
         ),
     )
-    # apply_css() backfills every *non-configured* attribute from CSS on
-    # each render, and __post_init__ only marks non-None fields as
-    # configured — so our deliberate None above would be replaced by the
-    # `.text-area--cursor-line { background: $boost }` component style,
-    # wiping chunk backgrounds under the cursor. Mark it configured so
-    # None sticks. (Private API; textual pinned <9.)
-    theme._theme_configured_attributes.add("cursor_line_style")
     return theme
 
 
@@ -79,6 +72,21 @@ class DiffPane(TextArea):
         ta_theme = build_textarea_theme(theme_def)
         self.register_theme(ta_theme)
         self.theme = ta_theme.name
+
+    def _set_theme(self, theme: str) -> None:
+        # apply_css() runs per-render and backfills every *non-configured*
+        # theme attribute from CSS. Our deliberately-None cursor_line_style
+        # (chunk backgrounds must survive the cursor; the gutter highlight
+        # carries the current-line signal instead) would be backfilled with
+        # `.text-area--cursor-line { background: $boost }`. Marking it
+        # configured at construction doesn't survive either: _set_theme
+        # copies via dataclasses.replace(), whose __post_init__ rebuilds
+        # the configured set from non-None fields. Enforce on the live
+        # copy every time it's installed. (Private API; textual pinned <9.)
+        super()._set_theme(theme)
+        if self._theme is not None and self._theme.name.startswith("tmeld-"):
+            self._theme.cursor_line_style = None
+            self._theme._theme_configured_attributes.add("cursor_line_style")
 
     def set_chunk_styling(
         self,

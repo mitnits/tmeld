@@ -37,10 +37,11 @@ class TmeldApp(App):
     }
     DiffPane {
         width: 1fr;
-        border: round $border;
+        border: none;
+        border-top: round $border;
     }
     DiffPane:focus {
-        border: round $accent;
+        border-top: round $accent;
     }
     """
 

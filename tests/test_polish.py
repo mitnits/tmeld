@@ -70,26 +70,65 @@ def test_pane_text_is_readable_on_light_page(paths):
     assert bg == "#ffffff"
 
 
-def test_gutter_arrows_visible_on_page_background(paths):
-    files = paths(["a", "NEW", "c"], ["a", "old", "c"])
+def gutter_row_text(gutter, y):
+    return "".join(seg.text for seg in gutter.render_line(y))
+
+
+def test_gutter_row_patterns(paths):
+    # User-specified layout: divider on quiet rows, open at chunks,
+    # arrows on the side that has lines to push. Equal-length files so
+    # rows align across panes at scroll 0.
+    files = paths(
+        ["a", "both-l", "c", "LEFT", "e"],
+        ["a", "both-r", "c", "RIGHT", "e"],
+    )
 
     async def scenario():
         app = TmeldApp(files)
         async with app.run_test(size=(100, 24)) as pilot:
             await pilot.pause()
             gutter = app.query_one(ActionGutter)
-            arrow_row = gutter.render_line(2)  # chunk at doc line 1 + border
-            blank_row = gutter.render_line(5)
-            arrow_seg = list(arrow_row)[0]
-            blank_seg = list(blank_row)[0]
-            return (
-                arrow_seg.style.bgcolor.name,
-                blank_seg.style.bgcolor.name,
-            )
+            # +1 for the pane top border: gutter row = doc line + 1
+            return {
+                "quiet": gutter_row_text(gutter, 1),   # line 0: "a"
+                "both": gutter_row_text(gutter, 2),    # both-l vs both-r
+                "arrow_seg_bg": [
+                    seg.style.bgcolor.name
+                    for seg in gutter.render_line(2)
+                ],
+            }
 
-    arrow_bg, blank_bg = run(scenario())
-    assert arrow_bg == "#bdddff"  # replace chunk fill behind the arrow
-    assert blank_bg == "#ffffff"  # gutter matches the page, not app dark
+    rows = run(scenario())
+    assert rows["quiet"] == "│ │"
+    assert rows["both"] == "▶ ◀"
+    # Arrows sit on the page background, not a colored pill
+    assert set(rows["arrow_seg_bg"]) == {"#ffffff"}
+
+
+def test_gutter_left_only_pattern(paths):
+    files = paths(["a", "LEFT", "c"], ["a", "c"])
+
+    async def scenario():
+        app = TmeldApp(files)
+        async with app.run_test(size=(100, 24)) as pilot:
+            await pilot.pause()
+            gutter = app.query_one(ActionGutter)
+            return gutter_row_text(gutter, 2)  # doc line 1 in left pane
+
+    assert run(scenario()) == "▶  "
+
+
+def test_gutter_right_only_pattern(paths):
+    files = paths(["a", "c"], ["a", "RIGHT", "c"])
+
+    async def scenario():
+        app = TmeldApp(files)
+        async with app.run_test(size=(100, 24)) as pilot:
+            await pilot.pause()
+            gutter = app.query_one(ActionGutter)
+            return gutter_row_text(gutter, 2)  # doc line 1 in right pane
+
+    assert run(scenario()) == "  ◀"
 
 
 def test_push_clears_highlight_in_both_panes(paths):
