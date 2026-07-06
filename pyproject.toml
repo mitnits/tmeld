@@ -9,9 +9,10 @@ description = "Meld, in your terminal: a faithful TUI port of the Meld diff/merg
 readme = "README.md"
 license = "GPL-2.0-or-later"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = ["textual>=8,<9"]
 
 [project.scripts]
+tmeld = "tmeld.app:main"
 tmeld-dump = "tmeld.dump:main"
 
 [tool.setuptools.packages.find]

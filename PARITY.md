@@ -14,9 +14,19 @@ file:line references so they can be re-verified after upstream bumps.
 
 From `upstream/data/styles/meld-base.style-scheme.xml.in` (theme `meld-base`,
 parent scheme `classic`) and `meld-dark.style-scheme.xml.in` (parent
-`solarized-dark`). `line-background` is the whole-line chunk background;
-`background` is used for e.g. the linkmap/gutter fills; `foreground` doubles
-as the tree-state text color (see §2).
+`solarized-dark`).
+
+**Painting semantics** (verified in `upstream/meld/sourceview.py:368-387` and
+`upstream/meld/style.py:145-164`):
+- `background` (the pale colors) is the **whole-row chunk fill**.
+- `line-background` (the saturated colors) draws the **1px top/bottom chunk
+  boundary lines** — including the lone horizontal line marking insert points
+  where a pane has no lines.
+- **`delete` chunk fills/lines are aliased to `insert`** in
+  `get_common_theme()`: one-sided lines paint green on whichever pane has
+  them. `meld:delete`'s own colors only style tree states (§2).
+- `foreground` doubles as the tree-state text color (see §2).
+- Current chunk gets `current-chunk-highlight` composited over its fill.
 
 ### meld-base (light)
 
