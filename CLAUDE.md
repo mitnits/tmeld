@@ -2,8 +2,9 @@
 
 Terminal-UI port of Meld (the GNOME visual diff/merge tool). Goal: a Meld
 user's muscle memory, color memory, and workflow transfer to a TUI that works
-over plain SSH. Read PLAN.md first — it holds the full architecture and the
-phase plan; this file holds working context that isn't in the plan.
+over plain SSH. Read PLAN.md first (full architecture + phase plan) and
+HANDOFF.md (current state, gotchas, detailed forward plan); this file holds
+working context that isn't in either.
 
 ## Load-bearing decisions (do not relitigate casually)
 
@@ -21,16 +22,21 @@ phase plan; this file holds working context that isn't in the plan.
 
 ## Environment / workflow
 
-- Primary dev machine: Windows (this repo, C:\Users\roman\projects\Meld).
-  Python 3.13, git available. Edit + unit tests run here.
-- Runtime target: **"mini"** — Debian 13 Linux box, passwordless SSH as `mini`.
-  Python 3.13.5. Bare repo at `~/git/tmeld.git` (git remote named `mini`),
-  working clone at `~/tmeld`. Deploy = push to `mini`, then
-  `ssh mini "git -C ~/tmeld pull"`.
-- Real-world verification: run tmeld on mini through an actual SSH session.
-  The user tests from a Mac (iTerm2) → mini.
-- User's multiplexer notes: starting with plain SSH (no screen/tmux). GNU
-  screen 4.x is a known truecolor-killer — see PLAN.md risks.
+- **Primary dev machine: mini** (Debian 13, this repo at `~/tmeld`,
+  Python 3.13.5, venv at `.venv` with textual 8.2.8 + pytest + editable
+  install). Development moved here from Windows on 2026-07-06 — see
+  HANDOFF.md. Bare repo at `~/git/tmeld.git` (remote `origin`); push
+  there after each coherent step. The old Windows clone
+  (C:\Users\roman\projects\Meld, remote name `mini`) may be stale.
+- Tests: `.venv/bin/python -m pytest` (all green expected). Run the app:
+  `.venv/bin/tmeld a b` or the `~/.local/bin/tmeld` symlink.
+- `upstream/` is a pinned Meld checkout @ 9c4be506 (gitignored) — the
+  vendoring source and the target of all PARITY.md file:line references.
+  Never pull/update it casually.
+- Real-world verification: the user SSHes in from a Mac (iTerm2,
+  sometimes gnome-terminal): `ssh -t mini tmeld /tmp/a.py /tmp/b.py`.
+- User's multiplexer notes: plain SSH (no screen/tmux). GNU screen 4.x
+  is a known truecolor-killer — see PLAN.md risks.
 
 ## Status
 
