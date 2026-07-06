@@ -13,8 +13,34 @@ from rich.style import Style
 from textual.binding import Binding
 from textual.message import Message
 from textual.widgets import TextArea
+from textual.widgets.text_area import TextAreaTheme
 
 from tmeld.palette import Theme
+
+
+def build_textarea_theme(theme_def: Theme) -> TextAreaTheme:
+    """TextArea styling from the Meld palette.
+
+    cursor_line_style is deliberately None: TextArea paints it over our
+    chunk backgrounds, making changed lines look unchanged when the
+    cursor lands on them. Instead the current line's *number* gets
+    Meld's current-line tint (user feedback from the first test drive).
+    """
+    return TextAreaTheme(
+        name=f"tmeld-{theme_def.name}",
+        base_style=Style(color=theme_def.text_fg, bgcolor=theme_def.page_bg),
+        gutter_style=Style(color=theme_def.unknown_fg, bgcolor=theme_def.page_bg),
+        cursor_style=Style(color=theme_def.page_bg, bgcolor=theme_def.text_fg),
+        cursor_line_style=None,
+        cursor_line_gutter_style=Style(
+            color=theme_def.current_line_fg,
+            bgcolor=theme_def.current_line_bg,
+            bold=True,
+        ),
+        selection_style=Style(
+            color=theme_def.selection_fg, bgcolor=theme_def.selection_bg
+        ),
+    )
 
 
 class DiffPane(TextArea):
@@ -42,6 +68,9 @@ class DiffPane(TextArea):
         self._line_styles: Dict[int, Style] = {}
         self._inline_styles: Dict[int, List[Tuple[int, int]]] = {}
         self._inline_style = Style(bgcolor=theme_def.inline_bg)
+        ta_theme = build_textarea_theme(theme_def)
+        self.register_theme(ta_theme)
+        self.theme = ta_theme.name
 
     def set_chunk_styling(
         self,
@@ -57,6 +86,10 @@ class DiffPane(TextArea):
             if tag in chunk
         }
         self._inline_styles = inline_ranges
+        # TextArea caches rendered strips keyed on text/selection state
+        # only — our chunk styling isn't in the key, so stale highlights
+        # survive a re-diff unless we drop the cache (textual pinned <9)
+        self._line_cache.clear()
         self.refresh()
 
     def get_line(self, line_index: int):

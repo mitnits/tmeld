@@ -30,6 +30,10 @@ class Theme:
     current_line_fg: str
     current_line_bg: str  # pre-composited
     page_bg: Optional[str]  # None = terminal default
+    # Pane text styling (GTK parent scheme: classic / solarized-dark)
+    text_fg: str = "#000000"
+    selection_fg: str = "#ffffff"
+    selection_bg: str = "#3584e4"
 
 
 MELD_BASE = Theme(
@@ -53,6 +57,9 @@ MELD_BASE = Theme(
     # rgba(255,255,0,0.25) over #ffffff
     current_line_bg="#ffffbf",
     page_bg="#ffffff",
+    text_fg="#000000",
+    selection_fg="#ffffff",
+    selection_bg="#3584e4",
 )
 
 MELD_DARK = Theme(
@@ -73,6 +80,9 @@ MELD_DARK = Theme(
     # rgba(17,17,0,0.25) over solarized-dark base #002b36
     current_line_bg="#002128",
     page_bg="#002b36",
+    text_fg="#839496",
+    selection_fg="#93a1a1",
+    selection_bg="#073642",
 )
 
 THEMES = {t.name: t for t in (MELD_BASE, MELD_DARK)}
