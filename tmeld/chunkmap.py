@@ -4,10 +4,11 @@ Maps document lines to widget rows and paints chunk positions with the
 theme's chunk colors — the terminal analogue of Meld's sourcemap strip.
 """
 
-from typing import List, Tuple
+from typing import Callable, List, Optional, Tuple
 
 from rich.segment import Segment
 from rich.style import Style
+from textual import events
 from textual.strip import Strip
 from textual.widget import Widget
 
@@ -20,6 +21,8 @@ class ChunkMap(Widget):
         width: 2;
     }
     """
+
+    on_jump: Optional[Callable[[int], None]] = None  # doc line callback
 
     def __init__(self, theme_def: Theme, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -48,3 +51,10 @@ class ChunkMap(Widget):
             return Strip.blank(self.size.width)
         style = Style(bgcolor=self.theme_def.chunk[tag].line)
         return Strip([Segment(" " * self.size.width, style)])
+
+    def on_click(self, event: events.Click) -> None:
+        if self.on_jump is None:
+            return
+        height = max(self.size.height, 1)
+        line = int(event.y * self._total_lines / height)
+        self.on_jump(line)

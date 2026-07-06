@@ -17,21 +17,42 @@ INLINE_CHAR_CAP = 20_000
 InlineRanges = Dict[int, List[Tuple[int, int]]]
 
 
-def read_lines(path: str) -> List[str]:
+def read_text(path: str) -> str:
     with open(path, encoding="utf-8", errors="replace", newline="") as f:
-        return f.read().splitlines()
+        return f.read()
 
 
 class Comparison:
-    """A 2-way (later 3-way) comparison of in-memory line sequences."""
+    """A 2-way (later 3-way) comparison of in-memory line sequences.
+
+    Lines are mutable: the UI updates them on edits and calls recompute()
+    to rebuild the chunk model (a fresh matcher run — identical chunks to
+    Meld's incremental change_sequence path, which can replace this later
+    for very large files).
+    """
 
     def __init__(self, paths: Sequence[str]):
         assert len(paths) == 2, "3-way arrives in Phase 5"
         self.paths = list(paths)
-        self.lines: List[List[str]] = [read_lines(p) for p in paths]
+        texts = [read_text(p) for p in paths]
+        self.lines: List[List[str]] = [t.splitlines() for t in texts]
+        # Preserve on save; empty files count as newline-terminated
+        self.trailing_newline = [t.endswith("\n") or not t for t in texts]
         self.differ = Differ()
-        for _ in self.differ.set_sequences_iter(self.lines):
+        self.recompute()
+
+    def recompute(self) -> None:
+        differ = Differ()
+        for _ in differ.set_sequences_iter(self.lines):
             pass
+        self.differ = differ
+
+    def save(self, pane: int) -> None:
+        text = "\n".join(self.lines[pane])
+        if self.trailing_newline[pane] and text:
+            text += "\n"
+        with open(self.paths[pane], "w", encoding="utf-8", newline="") as f:
+            f.write(text)
 
     @property
     def num_panes(self) -> int:

@@ -10,6 +10,7 @@ line indexes arrive directly in get_line. Textual is pinned to 8.x.
 from typing import Dict, List, Tuple
 
 from rich.style import Style
+from textual.binding import Binding
 from textual.message import Message
 from textual.widgets import TextArea
 
@@ -17,7 +18,13 @@ from tmeld.palette import Theme
 
 
 class DiffPane(TextArea):
-    """One comparison pane. Read-only in Phase 2."""
+    """One comparison pane. Editable since Phase 3."""
+
+    BINDINGS = [
+        # Meld's redo (TextArea ships ctrl+z/ctrl+y; Meld muscle memory
+        # expects ctrl+shift+z as well)
+        Binding("ctrl+shift+z", "redo", "Redo", show=False),
+    ]
 
     class Scrolled(Message):
         def __init__(self, pane: "DiffPane", value: float) -> None:
