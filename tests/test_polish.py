@@ -152,6 +152,61 @@ def test_push_clears_highlight_in_both_panes(paths):
     assert "8AC2FF" not in after
 
 
+def test_sync_scroll_does_not_jitter(paths):
+    # Regression for the endless up-down jitter: the synced pane's echo
+    # must not re-trigger a sync of the master. Uneven insert chunks make
+    # the interpolation asymmetric, which is what fed the loop.
+    a_lines = [f"line {i}" for i in range(300)]
+    b_lines = list(a_lines)
+    for pos in (250, 200, 150, 100, 50):
+        b_lines.insert(pos, f"extra at {pos}")
+    files = paths(a_lines, b_lines)
+
+    async def scenario():
+        app = TmeldApp(files)
+        async with app.run_test(size=(100, 24)) as pilot:
+            await pilot.pause()
+            app.panes[0].scroll_to(y=120, animate=False)
+            snapshots = []
+            for _ in range(6):
+                await pilot.pause(0.05)
+                snapshots.append(
+                    (app.panes[0].scroll_offset.y, app.panes[1].scroll_offset.y)
+                )
+            return snapshots
+
+    snapshots = run(scenario())
+    # After the initial sync settles, positions must be identical across
+    # every subsequent snapshot — any oscillation means the loop is back
+    assert len(set(snapshots[1:])) == 1, snapshots
+
+
+def test_save_button_in_title_when_dirty(paths):
+    files = paths(["a", "b", "c"], ["a", "b", "c"])
+
+    async def scenario():
+        app = TmeldApp(files)
+        async with app.run_test(size=(100, 24)) as pilot:
+            await pilot.pause()
+            pane = app.panes[0]
+            pane.focus()
+            pane.move_cursor((1, 0))
+            await pilot.press("Z")
+            await pilot.pause()
+            title_dirty = pane.border_title
+            # Click the title row (acts as the Save button while dirty)
+            await pilot.click(pane, offset=(4, 0))
+            await pilot.pause()
+            return title_dirty, pane.border_title, app.dirty[0]
+
+    title_dirty, title_after, dirty = run(scenario())
+    assert "Save" in title_dirty
+    assert "Save" not in title_after
+    assert dirty is False
+    with open(files[0], encoding="utf-8") as f:
+        assert f.read() == "a\nZb\nc\n"
+
+
 def test_edit_clears_stale_highlight_without_scroll(paths):
     # Same cache-staleness guard through the typing path: fix the
     # difference by editing, highlight must vanish after the debounce

@@ -72,6 +72,7 @@ class DiffPane(TextArea):
         ta_theme = build_textarea_theme(theme_def)
         self.register_theme(ta_theme)
         self.theme = ta_theme.name
+        self._sync_target: int | None = None
 
     def _set_theme(self, theme: str) -> None:
         # apply_css() runs per-render and backfills every *non-configured*
@@ -120,6 +121,29 @@ class DiffPane(TextArea):
             text.stylize(self._inline_style, start, end)
         return text
 
+    def sync_scroll_to(self, y: int) -> None:
+        """Programmatic scroll from the sync algorithm.
+
+        The resulting watch_scroll_y is swallowed instead of posting a
+        Scrolled message: Scrolled handlers run asynchronously, so a
+        simple in-progress flag cannot guard against the echo, and the
+        panes end up re-syncing each other in an endless jitter loop
+        whenever the chunk interpolation isn't perfectly symmetric.
+        """
+        self._sync_target = y
+        self.scroll_to(y=y, animate=False)
+
     def watch_scroll_y(self, old_value: float, new_value: float) -> None:
         super().watch_scroll_y(old_value, new_value)
+        expected, self._sync_target = self._sync_target, None
+        if expected is not None and int(new_value) == expected:
+            return  # echo of a sync scroll — don't sync back
         self.post_message(self.Scrolled(self, new_value))
+
+    def on_click(self, event) -> None:
+        # Border/title row acts as the Save button while dirty
+        if event.y == 0:
+            save_pane = getattr(self.app, "save_pane", None)
+            dirty = getattr(self.app, "dirty", None)
+            if save_pane and dirty and dirty[self.pane_index]:
+                save_pane(self.pane_index)

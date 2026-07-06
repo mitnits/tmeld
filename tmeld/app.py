@@ -67,7 +67,6 @@ class TmeldApp(App):
         self.panes: List[DiffPane] = []
         self.current_chunk = -1
         self.dirty = [False, False]
-        self._syncing_scroll = False
         self._rediff_timer = None
 
     def compose(self) -> ComposeResult:
@@ -102,12 +101,18 @@ class TmeldApp(App):
 
     # --- Styling refresh --------------------------------------------------
 
+    def _pane_title(self, i: int) -> str:
+        path = self.paths[i].replace("[", r"\[")
+        if self.dirty[i]:
+            return f"{path} [b]*[/b] [reverse b] Save [/reverse b]"
+        return path
+
     def _refresh_styling(self) -> None:
         comparison = self.comparison
         inline = comparison.inline_ranges()
         pane_chunks = [comparison.pane_chunks(i) for i in range(2)]
         for i, pane in enumerate(self.panes):
-            pane.border_title = self.paths[i] + (" *" if self.dirty[i] else "")
+            pane.border_title = self._pane_title(i)
             pane.set_chunk_styling(comparison.line_tags(i), inline[i])
         self.query_one(ActionGutter).set_chunks(pane_chunks)
         self.query_one(ChunkMap).set_chunks(
@@ -137,7 +142,7 @@ class TmeldApp(App):
     def _mark_dirty(self, i: int) -> None:
         if not self.dirty[i]:
             self.dirty[i] = True
-            self.panes[i].border_title = self.paths[i] + " *"
+            self.panes[i].border_title = self._pane_title(i)
 
     def _rediff(self) -> None:
         if self._rediff_timer is not None:
@@ -149,15 +154,17 @@ class TmeldApp(App):
         comparison.recompute()
         self._refresh_styling()
 
-    def action_save(self) -> None:
-        focused = self.focused
-        pane = focused if isinstance(focused, DiffPane) else self.panes[0]
-        i = pane.pane_index
+    def save_pane(self, i: int) -> None:
         self._rediff()
         self.comparison.save(i)
         self.dirty[i] = False
-        pane.border_title = self.paths[i]
+        self.panes[i].border_title = self._pane_title(i)
         self.notify(f"Saved {self.paths[i]}", timeout=2)
+
+    def action_save(self) -> None:
+        focused = self.focused
+        pane = focused if isinstance(focused, DiffPane) else self.panes[0]
+        self.save_pane(pane.pane_index)
 
     # --- Chunk actions (ported from filediff.py replace/delete_chunk) -----
 
@@ -259,7 +266,7 @@ class TmeldApp(App):
 
     def on_diff_pane_scrolled(self, message: DiffPane.Scrolled) -> None:
         self.query_one(ActionGutter).refresh()
-        if self._syncing_scroll or self.comparison is None:
+        if self.comparison is None:
             return
         master = message.pane.pane_index
         other = 1 - master
@@ -273,11 +280,9 @@ class TmeldApp(App):
             len(self.comparison.lines[other]),
             self.comparison.pair_chunks(master, other),
         )
-        self._syncing_scroll = True
-        try:
-            other_pane.scroll_to(y=target, animate=False)
-        finally:
-            self._syncing_scroll = False
+        # Echo suppression lives in sync_scroll_to (the Scrolled message
+        # arrives async, so a flag around this call can't guard the loop)
+        other_pane.sync_scroll_to(target)
 
     # --- Navigation ---------------------------------------------------------
 

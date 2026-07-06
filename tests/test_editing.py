@@ -47,7 +47,7 @@ def test_editing_triggers_rediff(paths):
     count, dirty, title = run(scenario())
     assert count == 1
     assert dirty == [False, True]
-    assert title.endswith("*")
+    assert "*" in title and "Save" in title
 
 
 def test_push_chunk_right_resolves_diff(paths):
