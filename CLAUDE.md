@@ -42,7 +42,16 @@ phase plan; this file holds working context that isn't in the plan.
   green on Windows and mini. Note: 2-way stored chunks are right->left;
   dump (and future UI) must reverse for left-pane presentation.
 - mini has a venv at ~/tmeld/.venv with pytest + textual installed.
-- Phase 2 next: two-pane read-only viewer in Textual. First task is the
-  spike: can TextArea do per-line backgrounds, or do we need a custom
-  Line-API widget? Then exact-color chunk rendering + sync scrolling per
-  PARITY.md §4.
+- Phase 2 done: `tmeld a b` is a working read-only two-pane viewer.
+  Spike verdict: TextArea subclass works — get_line() is the styling seam
+  (pad row + stylize under for chunk fill, stylize over for inline).
+  Sync scroll, chunk nav (Alt+Down/Up + Ctrl+D/E), ChunkMap, themes done.
+  IMPORTANT painting semantics learned from upstream (see PARITY.md §1):
+  pale "background" = row fill; saturated "line-background" = 1px chunk
+  boundary lines (not yet rendered in TUI — candidate: underline on last
+  chunk row); delete fills aliased to insert (one-sided lines = green).
+- Both machines have editable installs: .venv locally, ~/tmeld/.venv on
+  mini. Screenshot generator: spikes/screenshot.py -> docs/screenshot.svg.
+- Phase 3 next (editing + chunk actions) per PLAN.md. Also pending from
+  Phase 2 polish: current-chunk emphasis, chunk boundary line rendering,
+  viewport indicator on ChunkMap, snapshot tests.

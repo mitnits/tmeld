@@ -1,0 +1,3 @@
+[console_scripts]
+tmeld = tmeld.app:main
+tmeld-dump = tmeld.dump:main

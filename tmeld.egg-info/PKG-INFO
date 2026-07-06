@@ -1,0 +1,8 @@
+Metadata-Version: 2.4
+Name: tmeld
+Version: 0.0.1
+Summary: Meld, in your terminal: a faithful TUI port of the Meld diff/merge tool
+License-Expression: GPL-2.0-or-later
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: textual<9,>=8
