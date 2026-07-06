@@ -1,23 +1,22 @@
 """ActionGutter: the divider-plus-push-arrows column between panes.
 
 Three cells wide, doing double duty as the pane divider (user-designed
-layout, round 3 feedback):
+layout, rounds 3-4 feedback):
 
-    │ │   no diff on this row — the divider runs through
-    ▶     chunk pushable left->right (border opens across the chunk)
+    │ │   no action on this row — the divider runs through
+    ▶ │   chunk pushable left->right
     ▶ ◀   chunk with lines on both sides — pushable either way
-      ◀   chunk pushable right->left
+    │ ◀   chunk pushable right->left
 
-The vertical border is *interrupted* wherever a chunk touches the row on
-either side, echoing GTK Meld's open linkmap region. Arrows sit at chunk
-start rows, drawn in the chunk foreground color on the plain page
-background, and are click targets for the push.
+Each column is a continuous vertical line, broken only where a push
+arrow replaces it at a chunk start row. Arrows are drawn in the chunk
+foreground color on the plain page background and are click targets.
 
 Panes keep a 1-row top border (title), so gutter row r corresponds to
 pane document line r + scroll - 1.
 """
 
-from typing import Callable, Dict, List, Optional, Set
+from typing import Callable, Dict, List, Optional
 
 from rich.segment import Segment
 from rich.style import Style
@@ -48,26 +47,19 @@ class ActionGutter(Widget):
         self.panes: List = []  # DiffPanes, set by the app after compose
         # per pane: {chunk start line: (chunk_index, tag)}
         self._starts: List[Dict[int, tuple]] = [{}, {}]
-        # per pane: document lines any chunk touches (incl. insert points)
-        self._covered: List[Set[int]] = [set(), set()]
         self.on_push: Optional[PushCallback] = None
 
     def set_chunks(self, pane_chunks: List[list]) -> None:
         """pane_chunks[i] are pane-oriented chunks from single_changes(i);
         arrows appear only where the pane actually has lines to push."""
-        starts: List[Dict[int, tuple]] = [{}, {}]
-        covered: List[Set[int]] = [set(), set()]
-        for pane, chunks in enumerate(pane_chunks):
-            for index, c in enumerate(chunks):
-                if c.start_a != c.end_a:
-                    starts[pane][c.start_a] = (index, c.tag)
-                    covered[pane].update(range(c.start_a, c.end_a))
-                else:
-                    # Insert point: no lines to push from this side, but
-                    # the divider still opens at the splice row
-                    covered[pane].add(c.start_a)
-        self._starts = starts
-        self._covered = covered
+        self._starts = [
+            {
+                c.start_a: (index, c.tag)
+                for index, c in enumerate(chunks)
+                if c.start_a != c.end_a
+            }
+            for chunks in pane_chunks
+        ]
         self.refresh()
 
     def _doc_line(self, pane_index: int, y: int) -> int:
@@ -86,7 +78,6 @@ class ActionGutter(Widget):
             0 <= doc_line[i] < self.panes[i].document.line_count
             for i in (0, 1)
         ]
-        chunk_row = any(doc_line[i] in self._covered[i] for i in (0, 1))
 
         segments = []
         for col in (0, 1):
@@ -99,10 +90,10 @@ class ActionGutter(Widget):
                     self.ARROWS[col],
                     Style(color=fg, bgcolor=self.theme_def.page_bg, bold=True),
                 )
-            elif chunk_row or not in_pane[col]:
-                seg = Segment(" ", page)
-            else:
+            elif in_pane[col]:
                 seg = Segment(self.BORDER, border_style)
+            else:
+                seg = Segment(" ", page)
             segments.append(seg)
         # Layout: [col0] [spacer] [col1]
         segments.insert(1, Segment(" ", page))

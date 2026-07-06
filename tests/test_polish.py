@@ -115,7 +115,7 @@ def test_gutter_left_only_pattern(paths):
             gutter = app.query_one(ActionGutter)
             return gutter_row_text(gutter, 2)  # doc line 1 in left pane
 
-    assert run(scenario()) == "▶  "
+    assert run(scenario()) == "▶ │"
 
 
 def test_gutter_right_only_pattern(paths):
@@ -128,7 +128,7 @@ def test_gutter_right_only_pattern(paths):
             gutter = app.query_one(ActionGutter)
             return gutter_row_text(gutter, 2)  # doc line 1 in right pane
 
-    assert run(scenario()) == "  ◀"
+    assert run(scenario()) == "│ ◀"
 
 
 def test_push_clears_highlight_in_both_panes(paths):
