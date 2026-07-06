@@ -156,6 +156,24 @@ class DiffPane(TextArea):
             return  # echo of a sync scroll — don't sync back
         self.post_message(self.Scrolled(self, new_value))
 
+    def action_copy(self) -> None:
+        # Copy is silent by default; over SSH it lands on the *local*
+        # clipboard via OSC 52, which users can't see happen — notify.
+        text = self.selected_text
+        super().action_copy()
+        if text:
+            lines = text.count("\n") + 1
+            what = f"{lines} lines" if lines > 1 else f"{len(text)} chars"
+            self.notify(f"Copied {what}", timeout=1.5)
+
+    def action_cut(self) -> None:
+        text = self.selected_text
+        super().action_cut()
+        if text:
+            lines = text.count("\n") + 1
+            what = f"{lines} lines" if lines > 1 else f"{len(text)} chars"
+            self.notify(f"Cut {what}", timeout=1.5)
+
     def on_click(self, event) -> None:
         # Border/title row acts as the Save button while dirty
         if event.y == 0:
