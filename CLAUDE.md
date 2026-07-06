@@ -34,6 +34,15 @@ phase plan; this file holds working context that isn't in the plan.
 
 ## Status
 
-- Phase 0 (parity spec extraction) is next: clone upstream Meld, extract
-  palette + keymap + scroll-behavior spec into PARITY.md, set up vendoring
-  script recording the upstream commit hash.
+- Phase 0 done: PARITY.md holds palette, tree states, full keymap,
+  sync-scroll algorithm (upstream pinned @ 9c4be506). User note: exact hex
+  polish deferred until things work; meld-base already matches their memory.
+- Phase 1 done: engine vendored (maint/vendor.py), gi_shim for the two GTK
+  touchpoints, `python -m tmeld.dump a b` prints the chunk model, 10 tests
+  green on Windows and mini. Note: 2-way stored chunks are right->left;
+  dump (and future UI) must reverse for left-pane presentation.
+- mini has a venv at ~/tmeld/.venv with pytest + textual installed.
+- Phase 2 next: two-pane read-only viewer in Textual. First task is the
+  spike: can TextArea do per-line backgrounds, or do we need a custom
+  Line-API widget? Then exact-color chunk rendering + sync scrolling per
+  PARITY.md §4.
