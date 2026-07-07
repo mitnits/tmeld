@@ -131,7 +131,24 @@ working context that isn't in either.
   view's DEFAULT_CSS competes with the widget's own by specificity and
   loses to pseudo-class rules. Symptom was focus-dependent (terminal
   blur removes :focus). Regression test in test_app.py.
+- Phase 7 done: VC view. `tmeld .` (single path = VC view; all vc/
+  backends vendored — git/bzr/cvs/darcs/hg/svn; gi_shim grew a Gio
+  file-info shim over os.scandir; _vendor/meld/{conf,misc}.py are
+  HAND-WRITTEN shims, not vendored — vendor.py must not overwrite
+  them). tmeld/vcview.py: VcComparison ports vcview scan with gschema
+  default filters (flatten+modified); VcView reuses DirTree (1 col);
+  Enter ports run_diff — repo-temp (0o444, atexit cleanup) vs working,
+  read-only left; conflicts open remote|merge|local 3-way with output=
+  working file. FileDiffView grew labels/readonly/tab_title kwargs +
+  readonly write guards; OpenComparison generalized onto
+  ComparisonView (paths/output/labels/readonly/tab_title).
+  KEY DEVIATION: commit = 'c', revert = 'r' on the tree (Ctrl+M IS
+  Enter in terminals); Ctrl+R/F5 = refresh (also dirdiff). CommitScreen
+  = modal input; runner is sync subprocess + rescan. 123 tests green
+  (incl. end-to-end conflict resolve against scratch git repos).
 - Still open: chunk boundary lines (underline approx), Phase 4 linkmap,
-  Phase 7 VC view, Phase 8 graphics, dirdiff polish (F8 state/name
-  filter toggles, compare-marked, size/mtime columns, empty-folder
-  placeholder row test).
+  Phase 8 graphics + tier probe, dirdiff polish (F8 state/name filter
+  toggles, compare-marked, size/mtime columns), VC polish (push/update/
+  add/unstage actions, console output view, VC picker when multiple
+  repos overlap), Phase 9 backlog (find/replace, go-to-line, syntax,
+  config file, scrollbar theming).

@@ -8,6 +8,8 @@ by name onto the active view, so views simply implement the action_*
 methods that make sense for them (missing ones bell).
 """
 
+from typing import List, Optional, Sequence
+
 from textual.containers import Horizontal
 from textual.message import Message
 
@@ -19,6 +21,25 @@ class ComparisonView(Horizontal):
 
         def __init__(self, view: "ComparisonView") -> None:
             self.view = view
+            super().__init__()
+
+    class OpenComparison(Message):
+        """Ask the shell to open a file-comparison tab (folder/VC views
+        activate rows; upstream emits create_diff_signal)."""
+
+        def __init__(
+            self,
+            paths: List[str],
+            output: Optional[str] = None,
+            labels: Optional[Sequence[Optional[str]]] = None,
+            readonly: Sequence[int] = (),
+            tab_title: Optional[str] = None,
+        ) -> None:
+            self.paths = paths
+            self.output = output
+            self.labels = labels
+            self.readonly = readonly
+            self.tab_title = tab_title
             super().__init__()
 
     status_text = ""

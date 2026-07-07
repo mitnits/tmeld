@@ -8,6 +8,7 @@ over plain SSH. Two- and three-way file comparison and merging.
 tmeld a.py b.py                  # 2-way compare/edit
 tmeld local.py base.py remote.py # 3-way merge (middle = merged file)
 tmeld dirA dirB                  # folder comparison (Enter opens files)
+tmeld .                          # version-control view (git, hg, svn, ...)
 tmeld a b --diff c d --diff x y  # extra comparison tabs (like meld --diff)
 tmeld --theme meld-dark a b      # Meld's dark scheme
 ```
@@ -39,6 +40,13 @@ neighbor pane, Delete deletes it (press twice to confirm), Alt+Down/Up
 jump between differing rows, and Alt+PgDn/PgUp move the focused pane
 (the column copy/delete act on). Meld's default filename filters
 (backups, VCS metadata, binaries, OS cruft) apply.
+
+In the version-control view (`tmeld .` anywhere in a working copy):
+Enter compares a changed file against the repository (repo side
+read-only); a conflicted file opens as a remote/merge/local 3-way whose
+middle-pane saves resolve the working file. `c` commits (Meld's Ctrl+M
+IS Enter in a terminal, so the mnemonic moved), `r` reverts, Delete
+deletes, Ctrl+R/F5 rescans.
 
 ## git mergetool
 

@@ -362,15 +362,6 @@ class DirTree(ScrollView):
 class DirDiffView(ComparisonView):
     """One folder comparison: the DirTree plus its model and actions."""
 
-    class OpenComparison(Message):
-        """Ask the shell to open a file-comparison tab (Return on a
-        file row; upstream run_diff_from_iter passes only the paths
-        that exist)."""
-
-        def __init__(self, paths: List[str]) -> None:
-            self.paths = paths
-            super().__init__()
-
     def __init__(
         self,
         paths: Sequence[str],
@@ -440,6 +431,10 @@ class DirDiffView(ComparisonView):
     def _rescan(self) -> None:
         row = self.dirtree.cursor_row
         self._start_scan(cursor_key=row[2] if row else None)
+
+    def action_refresh(self) -> None:
+        """Ctrl+R / F5 (Meld's view refresh)."""
+        self._rescan()
 
     # --- Row activation ---------------------------------------------------------
 

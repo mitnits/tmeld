@@ -49,9 +49,7 @@ def test_shorten_names_same_basename_gets_indicator():
     "argv",
     [
         [],  # nothing to compare
-        ["one.txt"],  # 1 positional
         ["a", "b", "c", "d"],  # too many positionals
-        ["--diff", "only-one"],  # short --diff group
         ["--diff", "a", "b", "c", "d"],  # long --diff group
         ["-o", "out", "--diff", "a", "b"],  # -o without positional 3-way
         ["-o", "out", "a", "b"],  # -o with 2-way
@@ -60,6 +58,15 @@ def test_shorten_names_same_basename_gets_indicator():
 def test_cli_rejects(argv):
     with pytest.raises(SystemExit) as exc:
         main(argv)
+    assert exc.value.code == 2
+
+
+def test_cli_rejects_single_path_outside_vc(tmp_path):
+    # a single path means the VC view; outside any repo it's an error
+    lonely = tmp_path / "lonely"
+    lonely.mkdir()
+    with pytest.raises(SystemExit) as exc:
+        main([str(lonely)])
     assert exc.value.code == 2
 
 

@@ -31,6 +31,7 @@ from tmeld.comparisonview import ComparisonView
 from tmeld.dirdiff import DirDiffView
 from tmeld.filediff import REDIFF_DEBOUNCE, FileDiffView  # noqa: F401 (re-export)
 from tmeld.palette import DEFAULT_THEME, THEMES
+from tmeld.vcview import VcView
 
 # (paths, output-override-for-middle-pane)
 DiffSpec = Tuple[List[str], Optional[str]]
@@ -39,8 +40,12 @@ DiffSpec = Tuple[List[str], Optional[str]]
 def make_view(
     paths: Sequence[str], theme_def, output: Optional[str] = None
 ) -> ComparisonView:
-    """Files -> FileDiffView, folders -> DirDiffView (Meld auto-detects
-    comparison type from the arguments)."""
+    """Files -> FileDiffView, folders -> DirDiffView, single path ->
+    VcView (Meld auto-detects comparison type from the arguments)."""
+    if len(paths) == 1:
+        if output:
+            raise ValueError("--output requires a file comparison")
+        return VcView(paths[0], theme_def)
     dir_flags = [os.path.isdir(p) for p in paths]
     if all(dir_flags):
         if output:
@@ -130,6 +135,7 @@ class TmeldApp(App):
                 priority=True),
         Binding("alt+m", "merge_all", "Merge all", show=False, priority=True),
         Binding("ctrl+s", "save", "Save", priority=True),
+        Binding("ctrl+r,f5", "refresh", "Refresh", show=False, priority=True),
         Binding("alt+pagedown", "next_pane", "Next pane", show=False),
         Binding("alt+pageup", "previous_pane", "Prev pane", show=False),
         Binding("ctrl+w", "close_tab", "Close tab", show=False, priority=True),
@@ -255,12 +261,19 @@ class TmeldApp(App):
         if view is self.view:
             self.sub_title = view.status_text
 
-    def on_dir_diff_view_open_comparison(
-        self, message: DirDiffView.OpenComparison
+    def on_comparison_view_open_comparison(
+        self, message: ComparisonView.OpenComparison
     ) -> None:
-        """Return on a file row in a folder comparison: open a tab."""
+        """Row activated in a folder/VC view: open a comparison tab."""
         try:
-            view = FileDiffView(message.paths, self.theme_def)
+            view = FileDiffView(
+                message.paths,
+                self.theme_def,
+                output=message.output,
+                labels=message.labels,
+                readonly=message.readonly,
+                tab_title=message.tab_title,
+            )
         except OSError as err:
             self.notify(str(err), severity="error")
             return
@@ -379,6 +392,9 @@ class TmeldApp(App):
     def action_save(self) -> None:
         self._delegate("action_save")
 
+    def action_refresh(self) -> None:
+        self._delegate("action_refresh")
+
     def action_next_chunk(self) -> None:
         self._delegate("action_next_chunk")
 
@@ -439,11 +455,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument(
         "files", nargs="*",
         help="two or three files (3-way: LOCAL MERGED REMOTE) or folders "
-             "to compare",
+             "to compare; a single path opens the version-control view",
     )
     parser.add_argument(
         "--diff", action="append", nargs="+", default=[], metavar="PATH",
-        help="open an extra comparison tab for 2 or 3 paths (repeatable)",
+        help="open an extra comparison tab for 1-3 paths (repeatable)",
     )
     parser.add_argument(
         "-o", "--output", metavar="FILE",
@@ -457,13 +473,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    if args.files and len(args.files) not in (2, 3):
-        parser.error("expected 2 or 3 files")
+    if args.files and len(args.files) > 3:
+        parser.error("expected 1-3 paths")
     for group in args.diff:
-        if len(group) not in (2, 3):
-            parser.error("--diff takes 2 or 3 files")
+        if len(group) > 3:
+            parser.error("--diff takes 1-3 paths")
     if not args.files and not args.diff:
-        parser.error("expected 2 or 3 files")
+        parser.error("expected 1-3 paths to compare")
     if args.output and len(args.files) != 3:
         parser.error("--output requires a 3-way comparison")
 

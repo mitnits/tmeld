@@ -56,6 +56,9 @@ class FileDiffView(ComparisonView):
         paths: Sequence[str],
         theme_def: Theme,
         output: Optional[str] = None,
+        labels: Optional[Sequence[Optional[str]]] = None,
+        readonly: Sequence[int] = (),
+        tab_title: Optional[str] = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -63,6 +66,11 @@ class FileDiffView(ComparisonView):
         # Comparison reads the files here, so a bad path fails before
         # the shell mounts the view (clean CLI error, no TUI teardown)
         self.comparison = Comparison(paths, output=output)
+        # Display-only overrides (the VC view compares against unlabeled
+        # read-only temp files, like upstream vcview.run_diff)
+        self.labels = list(labels) if labels else [None] * self.num_panes
+        self.readonly = tuple(readonly)
+        self.tab_title = tab_title
         self.panes: List[DiffPane] = []
         self.gutters: List[ActionGutter] = []
         self.current_chunk = None  # merge-cache index of chunk at cursor
@@ -75,11 +83,21 @@ class FileDiffView(ComparisonView):
     def num_panes(self) -> int:
         return self.comparison.num_panes
 
+    def _display_name(self, i: int) -> str:
+        return self.labels[i] or self.comparison.save_paths[i]
+
     @property
     def tab_label(self) -> str:
         """Meld's notebook label (filediff.recompute_label): shortened
-        names joined with an em dash, '*' marking modified panes."""
-        shortnames = shorten_names(*self.comparison.save_paths)
+        names joined with an em dash, '*' marking modified panes; a
+        meta tab title (upstream meta["tablabel"]) wins outright."""
+        if self.tab_title:
+            if any(self.dirty):
+                return self.tab_title + "*"
+            return self.tab_title
+        shortnames = shorten_names(*[
+            self._display_name(i) for i in range(self.num_panes)
+        ])
         for i, dirty in enumerate(self.dirty):
             if dirty:
                 shortnames[i] += "*"
@@ -116,12 +134,14 @@ class FileDiffView(ComparisonView):
         for i, pane in enumerate(self.panes):
             pane.load_text("\n".join(self.comparison.lines[i]))
             self.dirty[i] = False
+            if i in self.readonly:
+                pane.read_only = True
         self._refresh_styling()
 
     # --- Styling refresh --------------------------------------------------
 
     def _pane_title(self, i: int) -> str:
-        path = self.comparison.save_paths[i].replace("[", r"\[")
+        path = self._display_name(i).replace("[", r"\[")
         if self.dirty[i]:
             return f"{path} [b]*[/b] [reverse b] Save [/reverse b]"
         return path
@@ -211,6 +231,9 @@ class FileDiffView(ComparisonView):
         self._refresh_styling()
 
     def save_pane(self, i: int) -> None:
+        if i in self.readonly:
+            self.app.bell()
+            return
         self._rediff()
         self.comparison.save(i)
         self.dirty[i] = False
@@ -273,6 +296,9 @@ class FileDiffView(ComparisonView):
             pane.replace(text, start_loc, end_loc)
 
     def _push_chunk(self, src: int, dst: int, chunk_index: int) -> None:
+        if dst in self.readonly:
+            self.app.bell()
+            return
         chunk = self.comparison.differ.get_chunk(chunk_index, src, dst)
         if chunk is None:
             self.app.bell()
@@ -318,6 +344,9 @@ class FileDiffView(ComparisonView):
 
     def _copy_chunk(self, src: int, dst: int, index: int, up: bool) -> None:
         """Port of filediff.copy_chunk: insert without deleting."""
+        if dst in self.readonly:
+            self.app.bell()
+            return
         chunk = self.comparison.differ.get_chunk(index, src, dst)
         if chunk is None:
             self.app.bell()
@@ -356,6 +385,9 @@ class FileDiffView(ComparisonView):
 
     def action_delete_chunk(self) -> None:
         pane = self._focused_pane()
+        if pane.pane_index in self.readonly:
+            self.app.bell()
+            return
         index = self._chunk_at_cursor()
         if index is None:
             self.app.bell()
