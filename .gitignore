@@ -13,3 +13,4 @@ debian/.debhelper/
 debian/debhelper-build-stamp
 build/
 dist/
+web/node_modules/

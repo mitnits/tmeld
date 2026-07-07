@@ -221,6 +221,29 @@ working context that isn't in either.
   CI has a deb job (build + lintian + install smoke test). The .deb is
   attached to the GitHub release. dpkg's /usr/bin/tmeld is shadowed by
   ~/.local/bin/tmeld (dev symlink) on mini — intended.
+- bmeld B0-B3 done (2026-07-07, single session): `bmeld a b [c]` =
+  Meld in the browser. tmeld/web/{server,protocol,cli}.py — aiohttp
+  (extras: tmeld[web]), token routes, WS session, chunks_payload
+  serializes the SAME Comparison methods the TUI renders from; client
+  = web/src (vanilla JS + CM6, esbuild bundle COMMITTED at
+  tmeld/web/static/bmeld.js ~280KB, rebuild: cd web && npm run
+  build; CI web-bundle job diffs for freshness). Thick client:
+  browser owns buffers, 250ms debounced buffers->chunks loop; chunk
+  actions are client-side ports of _replace_lines; merge-all runs
+  SERVER-side (vendored Merger, parity). SVG connectors = upstream
+  bezier verbatim; boundary 1px lines done via box-shadow (browser
+  got the TUI's open parity item for free). scroll.py ported to
+  web/src/scrollsync.js. Exit contract: Done button / --grace
+  disconnect timer; abandoned merge = exit 1. Validated in headless
+  Chromium (Playwright, venv-only dev dep): visual (pixel-sampled
+  exact #ffa5a3 connector fills) + full interaction gauntlet (push/
+  pull/merge-all/save-to-disk/exit codes/no console errors).
+  GOTCHA: merge-all AFTER manually resolving a conflict re-pulls the
+  other side (middle==one side looks like an unmerged change) — same
+  as Meld/tmeld; workflow is merge-all first. 145 tests green.
+- Still open (bmeld): tabs/--diff, folder + VC views, tier-2/3
+  transports (relay), Playwright job in CI, favicon, dark theme
+  toggle (palette plumbing exists).
 - Still open: chunk boundary lines (underline approx), Phase 4 Tier-1
   text linkmap (braille/box approx — may be moot given Tier 2),
   dirdiff polish (F8 state/name filter toggles, compare-marked,

@@ -30,9 +30,13 @@ Changelog = "https://github.com/mitnits/tmeld/blob/main/CHANGELOG.md"
 Issues = "https://github.com/mitnits/tmeld/issues"
 "Upstream (Meld)" = "https://gitlab.gnome.org/GNOME/meld"
 
+[project.optional-dependencies]
+web = ["aiohttp>=3.9"]
+
 [project.scripts]
 tmeld = "tmeld.app:main"
 tmeld-dump = "tmeld.dump:main"
+bmeld = "tmeld.web.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["tmeld*"]
@@ -41,6 +45,8 @@ include = ["tmeld*"]
 # provenance manifest + the vc/ package's BSD license text
 "tmeld._vendor" = ["UPSTREAM"]
 "tmeld._vendor.meld.vc" = ["COPYING"]
+# bmeld browser client (committed esbuild bundle; source in web/)
+"tmeld.web" = ["static/*"]
 
 [tool.setuptools.dynamic]
 version = {attr = "tmeld.__version__"}

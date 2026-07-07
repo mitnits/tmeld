@@ -25,7 +25,7 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          pip install -e . pytest
+          pip install -e '.[web]' pytest
       - name: Test
         run: python -m pytest -q
 
@@ -48,6 +48,19 @@ jobs:
         with:
           name: dist
           path: dist/
+
+  web-bundle:
+    # the committed bmeld.js must match a fresh build of web/src
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Rebuild client bundle
+        run: cd web && npm ci && npm run build
+      - name: Bundle is fresh
+        run: git diff --stat --exit-code tmeld/web/static/bmeld.js
 
   deb:
     runs-on: ubuntu-latest

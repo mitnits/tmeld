@@ -64,6 +64,27 @@ middle-pane saves resolve the working file. `c` commits (Meld's Ctrl+M
 IS Enter in a terminal, so the mnemonic moved), `r` reverts, Delete
 deletes, Ctrl+R/F5 rescans.
 
+## bmeld: Meld in your browser
+
+`pip install 'tmeld[web]'` adds the `bmeld` command: it starts a local
+server (127.0.0.1 only, token-protected) and prints a clickable URL —
+the same engine, palette and keybindings, rendered by CodeMirror with
+real SVG linkmap curves. Typing is local and instant; the server
+rediffs debounced snapshots and is the only thing that writes files.
+The process exits with the same mergetool contract as tmeld, so the
+`.gitconfig` stanza below works with `cmd = bmeld ...` too.
+
+```
+bmeld local.py base.py remote.py   # prints http://127.0.0.1:PORT/t/TOKEN
+bmeld --port 8731 a.py b.py        # fixed port: add a LocalForward line
+                                   # to ~/.ssh/config and remote links
+                                   # open on your local browser
+```
+
+Over SSH, bmeld prints the port-forward one-liner instead of trying to
+open a browser. Sessions survive reloads; closing the tab without
+saving a merge exits 1 after a grace period (`--grace`).
+
 ## Pixel linkmap (Tier 2)
 
 On terminals with graphics support, the gutter between panes widens

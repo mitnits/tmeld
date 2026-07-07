@@ -1,0 +1,16 @@
+{
+  "name": "bmeld-client",
+  "private": true,
+  "description": "bmeld browser client (bundled into tmeld/web/static)",
+  "scripts": {
+    "build": "esbuild src/main.js --bundle --minify --format=iife --outfile=../tmeld/web/static/bmeld.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1"
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6.10.4",
+    "@codemirror/state": "^6.7.1",
+    "@codemirror/view": "^6.43.6"
+  }
+}
