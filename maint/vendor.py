@@ -25,6 +25,7 @@ FILES = [
     "meld/matchers/diffutil.py",
     "meld/matchers/merge.py",
     "meld/matchers/helpers.py",
+    "meld/filters.py",
 ]
 
 REWRITES = [

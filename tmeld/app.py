@@ -16,6 +16,7 @@ git mergetool contract; closing a merge tab unsaved counts as failure).
 """
 
 import argparse
+import os
 import sys
 from typing import List, Optional, Sequence, Tuple
 
@@ -24,11 +25,30 @@ from textual.binding import Binding
 from textual.widgets import Footer, TabbedContent, TabPane, Tabs
 
 from tmeld import __version__
+from tmeld.comparisonview import ComparisonView
+from tmeld.dirdiff import DirDiffView
 from tmeld.filediff import REDIFF_DEBOUNCE, FileDiffView  # noqa: F401 (re-export)
 from tmeld.palette import DEFAULT_THEME, THEMES
 
 # (paths, output-override-for-middle-pane)
 DiffSpec = Tuple[List[str], Optional[str]]
+
+
+def make_view(
+    paths: Sequence[str], theme_def, output: Optional[str] = None
+) -> ComparisonView:
+    """Files -> FileDiffView, folders -> DirDiffView (Meld auto-detects
+    comparison type from the arguments)."""
+    dir_flags = [os.path.isdir(p) for p in paths]
+    if all(dir_flags):
+        if output:
+            raise ValueError("--output requires a file comparison")
+        return DirDiffView(paths, theme_def)
+    if any(dir_flags):
+        raise ValueError(
+            "cannot mix files and folders in one comparison"
+        )
+    return FileDiffView(paths, theme_def, output=output)
 
 
 class TmeldApp(App):
@@ -89,18 +109,19 @@ class TmeldApp(App):
         # Views are built here so file errors surface before the TUI
         # starts; self.views keeps closed tabs too — a merge tab closed
         # unsaved must still fail the exit-status contract.
-        self.views = [
-            FileDiffView(spec_paths, self.theme_def, output=spec_output)
+        self.views: List[ComparisonView] = [
+            make_view(spec_paths, self.theme_def, output=spec_output)
             for spec_paths, spec_output in diffs
         ]
         self._tab_ids = {view: f"tab{k}" for k, view in enumerate(self.views)}
+        self._tab_counter = len(self.views)
         self._active_view = self.views[0]
-        self._close_pending: Optional[FileDiffView] = None
+        self._close_pending: Optional[ComparisonView] = None
 
     # The active comparison; also the delegation target for the test
     # suite's app.panes / app.comparison / ... shorthands.
     @property
-    def view(self) -> FileDiffView:
+    def view(self) -> ComparisonView:
         return self._active_view
 
     @property
@@ -136,20 +157,20 @@ class TmeldApp(App):
         yield Footer()
 
     def on_mount(self) -> None:
-        self.view.panes[0].focus()
+        self.view.focus_default()
 
     # --- Tabs ---------------------------------------------------------------
 
     def on_tabbed_content_tab_activated(
         self, event: TabbedContent.TabActivated
     ) -> None:
-        view = event.pane.query_one(FileDiffView)
+        view = event.pane.query_one(ComparisonView)
         self._active_view = view
         self.sub_title = view.status_text
-        view.panes[0].focus()
+        view.focus_default()
 
-    def on_file_diff_view_status_changed(
-        self, message: FileDiffView.StatusChanged
+    def on_comparison_view_status_changed(
+        self, message: ComparisonView.StatusChanged
     ) -> None:
         view = message.view
         tab_id = self._tab_ids.get(view)
@@ -158,6 +179,28 @@ class TmeldApp(App):
             tabs.get_tab(tab_id).label = view.tab_label
         if view is self.view:
             self.sub_title = view.status_text
+
+    def on_dir_diff_view_open_comparison(
+        self, message: DirDiffView.OpenComparison
+    ) -> None:
+        """Return on a file row in a folder comparison: open a tab."""
+        try:
+            view = FileDiffView(message.paths, self.theme_def)
+        except OSError as err:
+            self.notify(str(err), severity="error")
+            return
+        tab_id = f"tab{self._tab_counter}"
+        self._tab_counter += 1
+        self.views.append(view)
+        self._tab_ids[view] = tab_id
+        tabs = self.query_one(TabbedContent)
+        tabs.add_pane(TabPane(view.tab_label, view, id=tab_id))
+        tabs.active = tab_id
+        self._update_single_class()
+
+    def _update_single_class(self) -> None:
+        open_count = len(self._tab_ids)
+        self.query_one(TabbedContent).set_class(open_count == 1, "single")
 
     def action_close_tab(self) -> None:
         view = self.view
@@ -179,6 +222,7 @@ class TmeldApp(App):
             return
         tab_id = self._tab_ids.pop(view)
         self.query_one(TabbedContent).remove_pane(tab_id)
+        self._update_single_class()
 
     def _clear_close_pending(self) -> None:
         self._close_pending = None
@@ -190,60 +234,69 @@ class TmeldApp(App):
         self.query_one(Tabs).action_previous_tab()
 
     # --- Delegation to the active comparison --------------------------------
+    # Window-level accelerators (as in Meld); each view implements the
+    # action_* methods that make sense for it, the rest bell.
+
+    def _delegate(self, name: str) -> None:
+        method = getattr(self.view, name, None)
+        if callable(method):
+            method()
+        else:
+            self.bell()
 
     def save_pane(self, i: int) -> None:
         self.view.save_pane(i)
 
     def action_save(self) -> None:
-        self.view.action_save()
+        self._delegate("action_save")
 
     def action_next_chunk(self) -> None:
-        self.view.action_next_chunk()
+        self._delegate("action_next_chunk")
 
     def action_previous_chunk(self) -> None:
-        self.view.action_previous_chunk()
+        self._delegate("action_previous_chunk")
 
     def action_push_right(self) -> None:
-        self.view.action_push_right()
+        self._delegate("action_push_right")
 
     def action_push_left(self) -> None:
-        self.view.action_push_left()
+        self._delegate("action_push_left")
 
     def action_pull_left(self) -> None:
-        self.view.action_pull_left()
+        self._delegate("action_pull_left")
 
     def action_pull_right(self) -> None:
-        self.view.action_pull_right()
+        self._delegate("action_pull_right")
 
     def action_copy_up_left(self) -> None:
-        self.view.action_copy_up_left()
+        self._delegate("action_copy_up_left")
 
     def action_copy_up_right(self) -> None:
-        self.view.action_copy_up_right()
+        self._delegate("action_copy_up_right")
 
     def action_copy_down_left(self) -> None:
-        self.view.action_copy_down_left()
+        self._delegate("action_copy_down_left")
 
     def action_copy_down_right(self) -> None:
-        self.view.action_copy_down_right()
+        self._delegate("action_copy_down_right")
 
     def action_delete_chunk(self) -> None:
-        self.view.action_delete_chunk()
+        self._delegate("action_delete_chunk")
 
     def action_merge_all(self) -> None:
-        self.view.action_merge_all()
+        self._delegate("action_merge_all")
 
     def action_next_conflict(self) -> None:
-        self.view.action_next_conflict()
+        self._delegate("action_next_conflict")
 
     def action_previous_conflict(self) -> None:
-        self.view.action_previous_conflict()
+        self._delegate("action_previous_conflict")
 
     def action_next_pane(self) -> None:
-        self.view.action_next_pane()
+        self._delegate("action_next_pane")
 
     def action_previous_pane(self) -> None:
-        self.view.action_previous_pane()
+        self._delegate("action_previous_pane")
 
     def exit_status(self) -> int:
         """Mergetool contract: every 3-way view must have been saved."""
@@ -256,11 +309,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     parser.add_argument(
         "files", nargs="*",
-        help="two or three files to compare (3-way: LOCAL MERGED REMOTE)",
+        help="two or three files (3-way: LOCAL MERGED REMOTE) or folders "
+             "to compare",
     )
     parser.add_argument(
-        "--diff", action="append", nargs="+", default=[], metavar="FILE",
-        help="open an extra comparison tab for 2 or 3 files (repeatable)",
+        "--diff", action="append", nargs="+", default=[], metavar="PATH",
+        help="open an extra comparison tab for 2 or 3 paths (repeatable)",
     )
     parser.add_argument(
         "-o", "--output", metavar="FILE",
@@ -291,7 +345,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     try:
         app = TmeldApp(theme_name=args.theme, diffs=diffs)
-    except OSError as e:
+    except (OSError, ValueError) as e:
         parser.error(str(e))
     app.run()
     return app.exit_status()

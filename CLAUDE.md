@@ -102,5 +102,26 @@ working context that isn't in either.
   closed tabs (closing an unsaved merge tab = mergetool failure). Tests
   rely on app.panes/comparison/dirty delegating to the active view.
   88 tests green.
+- Phase 6 done: folder comparison. `tmeld dirA dirB` (2- or 3-way).
+  Engine: tmeld/dircompare.py — _files_same/CanonicalListing copied
+  verbatim from upstream dirdiff.py, scan/state ports of
+  _search_recursively_iter/_update_item_state; meld/filters.py vendored
+  (maint/vendor.py); STATE_* constants copied from vc/_vc.py (re-point
+  when Phase 7 vendors vc/); gschema default name filters/comparison
+  args baked in. UI: tmeld/dirdiff.py DirDiffView + DirTree — ONE
+  shared tree model rendered as N state-styled columns (PARITY.md §2
+  styles; rows align across panes by construction), thread-worker scan,
+  rescan preserves expansion/cursor by name-chain row keys, difference
+  paths auto-expand. Keys per upstream accelerators: Return
+  compare/toggle, Alt+Left/Right copy row (focused pane -> neighbor),
+  Delete (twice to confirm), Alt+PgDn/PgUp switches focused COLUMN.
+  Views now share tmeld/comparisonview.py ComparisonView (tab_label /
+  status_text / StatusChanged / focus_default / merge_resolved); shell
+  actions dispatch by name to the active view, missing = bell. Enter
+  on a file row posts OpenComparison; shell opens a FileDiffView tab.
+  Widget.tree is taken by Textual — the attr is view.dirtree. 108
+  tests green. Demo dirs: /tmp/tmeld-demo/project-{a,b}.
 - Still open: chunk boundary lines (underline approx), Phase 4 linkmap,
-  Phase 6 dirdiff, Phase 7 VC view, Phase 8 graphics.
+  Phase 7 VC view, Phase 8 graphics, dirdiff polish (F8 state/name
+  filter toggles, compare-marked, size/mtime columns, empty-folder
+  placeholder row test).

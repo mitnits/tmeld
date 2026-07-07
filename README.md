@@ -7,6 +7,7 @@ over plain SSH. Two- and three-way file comparison and merging.
 ```
 tmeld a.py b.py                  # 2-way compare/edit
 tmeld local.py base.py remote.py # 3-way merge (middle = merged file)
+tmeld dirA dirB                  # folder comparison (Enter opens files)
 tmeld a b --diff c d --diff x y  # extra comparison tabs (like meld --diff)
 tmeld --theme meld-dark a b      # Meld's dark scheme
 ```
@@ -31,6 +32,13 @@ tmeld --theme meld-dark a b      # Meld's dark scheme
 Gutter arrows between panes are clickable (they push the chunk); the
 right-edge map is click-to-jump. On macOS terminals, set "Option as
 Esc+" (iTerm2: Profiles → Keys) so Alt bindings arrive.
+
+In folder comparisons: Enter compares the file under the cursor (or
+expands/collapses a folder), Alt+Left/Right copy the row to that
+neighbor pane, Delete deletes it (press twice to confirm), Alt+Down/Up
+jump between differing rows, and Alt+PgDn/PgUp move the focused pane
+(the column copy/delete act on). Meld's default filename filters
+(backups, VCS metadata, binaries, OS cruft) apply.
 
 ## git mergetool
 

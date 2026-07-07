@@ -19,11 +19,10 @@ view's middle pane was saved.
 from typing import Dict, List, Optional, Sequence
 
 from textual.app import ComposeResult
-from textual.containers import Horizontal
-from textual.message import Message
 from textual.widgets import TextArea
 
 from tmeld.chunkmap import ChunkMap
+from tmeld.comparisonview import ComparisonView
 from tmeld.comparison import Comparison
 from tmeld.gutter import ActionGutter
 from tmeld.misc import shorten_names
@@ -45,7 +44,7 @@ SCROLL_INFLUENCE: Dict[int, tuple] = {
 }
 
 
-class FileDiffView(Horizontal):
+class FileDiffView(ComparisonView):
     DEFAULT_CSS = """
     FileDiffView DiffPane {
         width: 1fr;
@@ -56,14 +55,6 @@ class FileDiffView(Horizontal):
         border-top: round $accent;
     }
     """
-
-    class StatusChanged(Message):
-        """Diff stats or dirty flags changed; the shell refreshes the
-        window subtitle and this view's tab label."""
-
-        def __init__(self, view: "FileDiffView") -> None:
-            self.view = view
-            super().__init__()
 
     def __init__(
         self,
@@ -512,6 +503,9 @@ class FileDiffView(Horizontal):
     def action_previous_pane(self) -> None:
         current = self._focused_pane().pane_index
         self.panes[(current - 1) % self.num_panes].focus()
+
+    def focus_default(self) -> None:
+        self.panes[0].focus()
 
     def merge_resolved(self) -> bool:
         """Mergetool contract: a 3-way view succeeds only if saved."""
