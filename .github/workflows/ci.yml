@@ -57,7 +57,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            debhelper devscripts lintian python3-pip python3-setuptools
+            build-essential debhelper devscripts lintian \
+            python3-pip python3-setuptools
       - name: Build .deb
         run: dpkg-buildpackage -us -uc -b
       - name: Lintian
