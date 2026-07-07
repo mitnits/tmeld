@@ -1,8 +1,14 @@
 # tmeld — Meld, in your terminal
 
+[![CI](https://github.com/mitnits/tmeld/actions/workflows/ci.yml/badge.svg)](https://github.com/mitnits/tmeld/actions/workflows/ci.yml)
+[![License: GPL v2+](https://img.shields.io/badge/license-GPL--2.0--or--later-blue.svg)](LICENSE)
+
 A faithful terminal port of [GNOME Meld](https://meld.app/): the same
 diff engine (vendored verbatim), the same colors, the same keybindings —
-over plain SSH. Two- and three-way file comparison and merging.
+over plain SSH. Two- and three-way file comparison and merging, folder
+comparison, and a version-control view.
+
+![tmeld three-way merge](docs/screenshot.svg)
 
 ```
 tmeld a.py b.py                  # 2-way compare/edit

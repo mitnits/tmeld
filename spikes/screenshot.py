@@ -19,4 +19,4 @@ async def shoot(paths, out):
 
 
 if __name__ == "__main__":
-    asyncio.run(shoot(sys.argv[1:3], sys.argv[3]))
+    asyncio.run(shoot(sys.argv[1:-1], sys.argv[-1]))

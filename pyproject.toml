@@ -24,6 +24,9 @@ classifiers = [
 ]
 
 [project.urls]
+Homepage = "https://github.com/mitnits/tmeld"
+Changelog = "https://github.com/mitnits/tmeld/blob/main/CHANGELOG.md"
+Issues = "https://github.com/mitnits/tmeld/issues"
 "Upstream (Meld)" = "https://gitlab.gnome.org/GNOME/meld"
 
 [project.scripts]
