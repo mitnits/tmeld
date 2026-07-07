@@ -78,6 +78,15 @@ class TmeldApp(App):
     TabbedContent.single Tabs {
         display: none;
     }
+    /* The underline alone is easy to miss; give the active tab its own
+       background (user round 6) */
+    Tab.-active {
+        background: #3d3d3d;
+        text-style: bold;
+    }
+    Tab.-active:hover {
+        background: #4a4a4a;
+    }
     TabArrows {
         layer: tabarrows;
         dock: right;

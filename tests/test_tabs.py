@@ -336,3 +336,16 @@ def test_tab_arrows_hidden_when_tabs_fit(pair):
             assert not app.query_one(TabArrows).display
 
     run(scenario())
+
+
+def test_active_tab_background_highlight(pair):
+    diffs = [(pair([f"l{i}"], [f"r{i}"]), None) for i in range(3)]
+
+    async def scenario():
+        app = TmeldApp(diffs=diffs)
+        async with app.run_test(size=(100, 20)) as pilot:
+            await pilot.pause()
+            svg = app.export_screenshot()
+            assert "#3d3d3d" in svg  # active tab background
+
+    run(scenario())
