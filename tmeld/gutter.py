@@ -22,7 +22,6 @@ The escape write bypasses Textual via app._driver.write — private API,
 same precedent as pane._set_theme; re-audit on textual bump.
 """
 
-import itertools
 from typing import Callable, Dict, List, Optional, Tuple
 
 from rich.segment import Segment
@@ -31,13 +30,8 @@ from textual import events
 from textual.strip import Strip
 from textual.widget import Widget
 
-from tmeld.linkmap import (
-    connectors_for_chunks,
-    kitty_delete_escape,
-    kitty_place_escape,
-    render_connectors,
-    sixel_escape,
-)
+from tmeld.linkmap import connectors_for_chunks, render_connectors
+from tmeld.overlay import GraphicsOverlay, OverlayImage
 from tmeld.palette import Theme
 
 PANE_BORDER_ROWS = 1
@@ -50,7 +44,7 @@ GRAPHIC_IMAGE_COLS = 4
 PushCallback = Callable[[int, int, int], None]  # (src, dst, chunk_index)
 
 
-class ActionGutter(Widget):
+class ActionGutter(GraphicsOverlay, Widget):
     DEFAULT_CSS = """
     ActionGutter {
         width: 3;
@@ -59,8 +53,6 @@ class ActionGutter(Widget):
 
     ARROWS = ("▶", "◀")
     BORDER = "│"
-
-    _image_ids = itertools.count(100)
 
     def __init__(self, theme_def: Theme, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -73,24 +65,14 @@ class ActionGutter(Widget):
         # per column: {chunk start line: (merge-cache index, tag)}
         self._starts: List[Dict[int, tuple]] = [{}, {}]
         self.on_push: Optional[PushCallback] = None
-        # Tier 2 wiring (set by the view / read from the app on mount)
-        self.graphics = "none"
-        self.cell_px: Tuple[int, int] = (8, 16)
+        # Tier 2 wiring (set by the view)
         self.pair_changes: Optional[Callable[[], list]] = None
         self.current_chunk_starts: Optional[Callable[[], frozenset]] = None
-        self._image_id = next(self._image_ids)
-        self._overlay_scheduled = False
 
     def on_mount(self) -> None:
-        mode = getattr(self.app, "graphics", "none")
-        if mode in ("kitty", "sixel"):
-            self.graphics = mode
-            self.cell_px = getattr(self.app, "cell_px", (8, 16))
+        self._init_graphics()
+        if self.graphics != "none":
             self.styles.width = 2 + GRAPHIC_IMAGE_COLS
-
-    def on_unmount(self) -> None:
-        if self.graphics == "kitty":
-            self._write(kitty_delete_escape(self._image_id))
 
     def set_starts(self, starts: List[Dict[int, tuple]]) -> None:
         """Per-column arrow positions from Comparison.action_starts:
@@ -149,32 +131,14 @@ class ActionGutter(Widget):
 
     # --- Tier 2 pixel-linkmap overlay ----------------------------------------
 
-    def refresh_overlay(self) -> None:
-        """Schedule an overlay repaint after the next Textual frame (so
-        the image lands on top of freshly painted cells)."""
-        if self.graphics == "none" or self._overlay_scheduled:
-            return
-        self._overlay_scheduled = True
-        self.app.call_after_refresh(self._paint_overlay)
-
-    def clear_overlay(self) -> None:
-        if self.graphics == "kitty":
-            self._write(kitty_delete_escape(self._image_id))
-
-    def _paint_overlay(self) -> None:
-        self._overlay_scheduled = False
-        if (
-            self.graphics == "none"
-            or len(self.panes) != 2
-            or self.pair_changes is None
-            or not self.display
-        ):
-            return
+    def _render_overlay(self) -> Optional[OverlayImage]:
+        if len(self.panes) != 2 or self.pair_changes is None:
+            return None
         region = self.content_region
         image_cols = self.size.width - 2
         image_rows = self.size.height - PANE_BORDER_ROWS
         if image_cols <= 0 or image_rows <= 0 or not region.width:
-            return
+            return None
         cell_w, cell_h = self.cell_px
         width_px, height_px = image_cols * cell_w, image_rows * cell_h
         starts = (
@@ -201,23 +165,7 @@ class ActionGutter(Widget):
             connectors, width_px, height_px, self.theme_def,
             background=background,
         )
-        if self.graphics == "kitty":
-            payload = kitty_place_escape(
-                self._image_id, rgba, width_px, height_px
-            )
-        else:
-            payload = sixel_escape(rgba, width_px, height_px)
-        # Save cursor, jump to the image cell, paint, restore
-        row, col = region.y + PANE_BORDER_ROWS, region.x + 1
-        self._write(f"\x1b7\x1b[{row + 1};{col + 1}H{payload}\x1b8")
-
-    def _write(self, escape: str) -> None:
-        driver = getattr(self.app, "_driver", None)
-        if driver is not None:
-            try:
-                driver.write(escape)
-            except Exception:
-                pass
-
-    def on_resize(self) -> None:
-        self.refresh_overlay()
+        return (
+            rgba, width_px, height_px,
+            region.y + PANE_BORDER_ROWS, region.x + 1,
+        )

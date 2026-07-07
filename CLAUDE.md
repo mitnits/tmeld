@@ -166,6 +166,20 @@ working context that isn't in either.
   terminals as of writing — iTerm2 = sixel is the user's daily path.
   Known gaps: modal over kitty image not cleared; probe adds ≤300ms
   on terminals that never answer DA1.
+- Graphics round 2 (user feedback): linkmap shrunk to 4 image cols
+  (6-cell gutter). ChunkMap gets a pixel overlay in graphics mode —
+  render_chunk_map paints per-chunk spans (min 1px, so single-line
+  chunks in huge files stay visible; cell rows were ~total/45 lines
+  each) + translucent viewport lens; shared plumbing factored into
+  tmeld/overlay.py GraphicsOverlay mixin (gutter + chunkmap).
+  GOTCHA: on_tab_hidden can arrive after the view is unmounted —
+  query(), not query_one(), for overlay widgets.
+- PINNED idea (user, 2026-07-07): shrink terminal font while tmeld
+  runs to fit more text — doable opt-in per terminal: iTerm2 OSC 1337
+  SetProfile=<name> (needs a user-made small-font profile + a restore
+  profile name; crash leaves it switched), kitty remote-control
+  set-font-size (needs allow_remote_control). No universal escape.
+  Decided: not now; revisit as --font-profile flag.
 - Still open: chunk boundary lines (underline approx), Phase 4 Tier-1
   text linkmap (braille/box approx — may be moot given Tier 2),
   dirdiff polish (F8 state/name filter toggles, compare-marked,

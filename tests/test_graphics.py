@@ -119,3 +119,23 @@ def test_probe_returns_none_headless():
     from tmeld.term import probe_graphics
 
     assert probe_graphics(timeout=0.05) == "none"
+
+
+def test_chunkmap_paints_pixel_overlay(files):
+    async def scenario():
+        from tmeld.chunkmap import ChunkMap
+
+        app = TmeldApp(files, graphics="kitty", cell_px=(8, 16))
+        async with app.run_test() as pilot:
+            written = []
+            chunkmap = app.views[0].query_one(ChunkMap)
+            chunkmap._write = written.append
+            await pilot.pause()
+            chunkmap.refresh_overlay()
+            await pilot.pause()
+            assert any("\x1b_G" in w for w in written)
+            # image height covers the full map at cell resolution
+            escape = written[-1]
+            assert f"v={chunkmap.content_region.height * 16}" in escape
+
+    run(scenario())

@@ -442,7 +442,9 @@ class FileDiffView(ComparisonView):
         for gutter in self.gutters:
             gutter.refresh()
             gutter.refresh_overlay()
-        self.query_one(ChunkMap).refresh()
+        chunkmap = self.query_one(ChunkMap)
+        chunkmap.refresh()
+        chunkmap.refresh_overlay()
         master = message.pane.pane_index
         master_pane = self.panes[master]
         page = master_pane.scrollable_content_region.height or 1
@@ -556,14 +558,19 @@ class FileDiffView(ComparisonView):
     def focus_default(self) -> None:
         self.panes[0].focus()
 
+    def _overlay_widgets(self):
+        # query (not query_one): a just-closed tab's view is already
+        # unmounted when the shell delivers the final on_tab_hidden
+        return (*self.gutters, *self.query(ChunkMap))
+
     def on_tab_shown(self) -> None:
-        for gutter in self.gutters:
-            gutter.refresh_overlay()
+        for widget in self._overlay_widgets():
+            widget.refresh_overlay()
 
     def on_tab_hidden(self) -> None:
         # kitty images float above cells; hide them with the tab
-        for gutter in self.gutters:
-            gutter.clear_overlay()
+        for widget in self._overlay_widgets():
+            widget.clear_overlay()
 
     def merge_resolved(self) -> bool:
         """Mergetool contract: a 3-way view succeeds only if saved."""

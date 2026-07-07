@@ -129,3 +129,35 @@ def test_sixel_escape_structure():
     assert esc.endswith("\x1b\\")
     assert "#0;2;" in esc  # palette definition
     assert esc.count("-") == 2  # 12 rows -> two 6-row bands
+
+
+def test_chunk_map_keeps_tiny_chunks_visible():
+    from tmeld.linkmap import render_chunk_map
+
+    # one single-line chunk in a 5000-line file, mapped to 32x720px:
+    # the cell renderer would lose it; the pixel map must show it
+    chunks = [("conflict", 2500, 2501)]
+    width, height = 16, 720
+    rgba = render_chunk_map(chunks, 5000, width, height, MELD_BASE)
+    line = MELD_BASE.chunk["conflict"].line
+    lr = (int(line[1:3], 16), int(line[3:5], 16), int(line[5:7], 16))
+    target_y = round(2500.5 * height / 5000)
+    found = False
+    for y in range(target_y - 2, target_y + 3):
+        px = pixel(rgba, width, 8, y)
+        if all(abs(c - e) < 90 for c, e in zip(px[:3], lr)):
+            found = True
+    assert found, "single-line chunk not visible in pixel map"
+
+
+def test_chunk_map_viewport_is_translucent():
+    from tmeld.linkmap import render_chunk_map
+
+    rgba = render_chunk_map(
+        [], 100, 8, 200, MELD_BASE, viewport=(0.0, 50.0)
+    )
+    inside = pixel(rgba, 8, 4, 50)
+    outside = pixel(rgba, 8, 4, 150)
+    assert outside[:3] == (255, 255, 255)  # meld-base page bg
+    assert inside != outside  # shaded
+    assert inside[0] > 120  # but not opaque overlay color (#646464)

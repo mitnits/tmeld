@@ -142,14 +142,18 @@ class _Canvas:
             )
         data[i + 3] = round(out_a * 255)
 
-    def fill_span(self, x: int, top: float, bottom: float, rgb: RGB) -> None:
-        """Paint the vertical span [top, bottom] with edge coverage."""
+    def fill_span(
+        self, x: int, top: float, bottom: float, rgb: RGB,
+        alpha: float = 1.0,
+    ) -> None:
+        """Paint the vertical span [top, bottom] with edge coverage,
+        scaled by alpha (for translucent overlays)."""
         if bottom < top:
             return
         first, last = int(top // 1), int(bottom // 1)
         for y in range(max(0, first), min(self.height, last + 1)):
             cover = min(bottom, y + 1.0) - max(top, float(y))
-            self.blend_pixel(x, y, rgb, max(0.0, min(1.0, cover)))
+            self.blend_pixel(x, y, rgb, max(0.0, min(1.0, cover)) * alpha)
 
 
 def render_connectors(
@@ -186,6 +190,54 @@ def render_connectors(
             # 1px stroke bands along both edges (line_width=1.0 upstream)
             canvas.fill_span(x, top - 0.5, top + 0.5, line_rgb)
             canvas.fill_span(x, bottom - 0.5, bottom + 0.5, line_rgb)
+    return canvas.data
+
+
+def render_chunk_map(
+    chunks: Iterable[Tuple[str, int, int]],
+    total_lines: int,
+    width_px: int,
+    height_px: int,
+    theme: Theme,
+    viewport: Optional[Tuple[float, float]] = None,
+    background: Optional[str] = None,
+) -> bytearray:
+    """Rasterize the overview map at pixel resolution.
+
+    chunks are (tag, start_line, end_line); each paints an anti-aliased
+    span in the saturated line color, at least 1px tall so single-line
+    chunks in huge files stay visible (the cell renderer can't do
+    that). viewport is (top_line, bottom_line) shaded with Meld's
+    map-overlay color.
+    """
+    canvas = _Canvas(width_px, height_px)
+    bg = _hex_rgb(background or theme.page_bg or "#000000")
+    for i in range(0, len(canvas.data), 4):
+        canvas.data[i:i + 4] = bytes((*bg, 255))
+
+    total = max(total_lines, 1)
+    scale = height_px / total
+    for tag, start, end in chunks:
+        style = theme.chunk.get(tag)
+        if style is None:
+            continue
+        rgb = _hex_rgb(style.line)
+        top = start * scale
+        bottom = max(end, start + 1) * scale
+        if bottom - top < 1.0:  # keep tiny chunks visible
+            middle = (top + bottom) / 2.0
+            top, bottom = middle - 0.5, middle + 0.5
+        for x in range(width_px):
+            canvas.fill_span(x, top, bottom, rgb)
+
+    if viewport is not None:
+        overlay_rgb = _hex_rgb(theme.overlay_color)
+        top = viewport[0] * scale
+        bottom = max(viewport[1] * scale, top + 1.0)
+        for x in range(width_px):
+            canvas.fill_span(
+                x, top, bottom, overlay_rgb, alpha=theme.overlay_alpha
+            )
     return canvas.data
 
 
