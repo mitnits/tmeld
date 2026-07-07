@@ -14,7 +14,9 @@ DESTLIB := debian/tmeld/usr/share/tmeld/lib
 override_dh_auto_configure:
 
 override_dh_auto_build:
-	pip3 install --target $(VENDOR) --no-compile --no-build-isolation --no-deps .
+	# build isolation fetches a PEP 639-capable setuptools (the build
+	# needs network for textual regardless)
+	pip3 install --target $(VENDOR) --no-compile --no-deps .
 	pip3 install --target $(VENDOR) --no-compile "textual>=8,<9"
 
 override_dh_auto_test:
