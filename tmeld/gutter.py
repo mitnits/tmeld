@@ -42,8 +42,10 @@ from tmeld.palette import Theme
 
 PANE_BORDER_ROWS = 1
 
-# Width of the pixel-linkmap area, in cells, between the arrow columns
-GRAPHIC_IMAGE_COLS = 7
+# Width of the pixel-linkmap area, in cells, between the arrow columns.
+# Meld's own linkmap is ~50px ≈ 5-6 cells including arrows; 4 + 2 arrow
+# columns matches that (7 was too much — user round 7).
+GRAPHIC_IMAGE_COLS = 4
 
 PushCallback = Callable[[int, int, int], None]  # (src, dst, chunk_index)
 
