@@ -135,12 +135,12 @@ def test_tab_labels_shorten_and_mark_dirty(pair):
         async with app.run_test() as pilot:
             await pilot.pause()
             tabs = app.query_one(TabbedContent)
-            assert str(tabs.get_tab("tab0").label) == "a.txt — b.txt"
+            assert str(tabs.get_tab("tab0").label) == "a.txt — b.txt ✕"
             app.panes[0].focus()
             await pilot.pause()
             await pilot.press("Z")
             await pilot.pause()
-            assert str(tabs.get_tab("tab0").label) == "a.txt* — b.txt"
+            assert str(tabs.get_tab("tab0").label) == "a.txt* — b.txt ✕"
 
     run(scenario())
 
@@ -228,5 +228,72 @@ def test_exit_status_ok_after_middle_save(pair, tmp_path):
             app.save_pane(1)
             await pilot.pause()
             assert app.exit_status() == 0
+
+    run(scenario())
+
+
+def test_close_button_action_closes_background_tab(pair):
+    files1 = pair(["a"], ["b"])
+    files2 = pair(["x"], ["y"])
+
+    async def scenario():
+        app = TmeldApp(diffs=[(files1, None), (files2, None)])
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            assert app.view is app.views[0]
+            # the ✕ of the inactive second tab closes it without
+            # switching the active view
+            app.action_close_tab_by_id("tab1")
+            await pilot.pause()
+            assert len(app.query(FileDiffView)) == 1
+            assert app.view is app.views[0]
+
+    run(scenario())
+
+
+def test_close_button_respects_dirty_confirmation(pair):
+    files1 = pair(["a"], ["b"])
+    files2 = pair(["x"], ["y"])
+
+    async def scenario():
+        app = TmeldApp(diffs=[(files1, None), (files2, None)])
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.panes[0].focus()
+            await pilot.pause()
+            await pilot.press("Z")
+            await pilot.pause()
+            app.action_close_tab_by_id("tab0")
+            await pilot.pause()
+            assert len(app.query(FileDiffView)) == 2  # warned, not closed
+            app.action_close_tab_by_id("tab0")
+            await pilot.pause()
+            assert len(app.query(FileDiffView)) == 1
+
+    run(scenario())
+
+
+def test_clicking_close_button_closes_without_crash(pair):
+    """Regression: the ✕ @click removes the tab while the Tab.Clicked
+    event is still queued; unpatched, Textual's activation then raises
+    on the stale tab id (see TmeldApp._harden_tab_activation)."""
+    files1 = pair(["a"], ["b"])
+    files2 = pair(["x"], ["y"])
+
+    async def scenario():
+        app = TmeldApp(diffs=[(files1, None), (files2, None)])
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.pause()
+            # scan the tab row until the ✕ is hit (label widths vary)
+            closed_at = None
+            for x in range(0, 40):
+                await pilot.click(Tabs, offset=(x, 0))
+                await pilot.pause()
+                if len(app.query(FileDiffView)) == 1:
+                    closed_at = x
+                    break
+            assert closed_at is not None, "no click position closed the tab"
+            # app survived the click (run_test re-raises app crashes)
+            assert app.is_running
 
     run(scenario())

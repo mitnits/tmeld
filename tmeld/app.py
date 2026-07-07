@@ -21,6 +21,7 @@ import sys
 from typing import List, Optional, Sequence, Tuple
 
 from textual.app import App, ComposeResult
+from textual.markup import escape
 from textual.binding import Binding
 from textual.widgets import Footer, TabbedContent, TabPane, Tabs
 
@@ -156,16 +157,44 @@ class TmeldApp(App):
     def merged_saved(self) -> bool:
         return self.view.merged_saved
 
+    def _tab_label(self, view: ComparisonView) -> str:
+        """Tab title markup plus a click-to-close ✕ (Meld tabs have one
+        too). Textual parses the @click action from the markup."""
+        tab_id = self._tab_ids[view]
+        return (
+            f"{escape(view.tab_label)} "
+            f"[dim @click=app.close_tab_by_id('{tab_id}')]✕[/]"
+        )
+
     def compose(self) -> ComposeResult:
         single = "single" if len(self.views) == 1 else ""
         with TabbedContent(id="tabs", classes=single):
             for view in self.views:
-                with TabPane(view.tab_label, id=self._tab_ids[view]):
+                with TabPane(self._tab_label(view), id=self._tab_ids[view]):
                     yield view
         yield Footer()
 
     def on_mount(self) -> None:
         self.view.focus_default()
+        self._harden_tab_activation()
+
+    def _harden_tab_activation(self) -> None:
+        """Clicking a tab's ✕ removes the tab while the Tab.Clicked
+        event is still queued; Textual's ContentTabs._activate_tab then
+        raises on the stale tab id and takes the app down. Skip
+        activation for tabs that are already gone.
+
+        Instance-level patch of a private Textual API (like
+        pane._set_theme) — re-audit on textual major bump.
+        """
+        tabs = self.query_one(Tabs)
+        original_activate = tabs._activate_tab
+
+        def activate_if_present(tab) -> None:
+            if tab.id and tabs.query(f"#tabs-list > #{tab.id}"):
+                original_activate(tab)
+
+        tabs._activate_tab = activate_if_present
 
     # --- Tabs ---------------------------------------------------------------
 
@@ -184,7 +213,7 @@ class TmeldApp(App):
         tab_id = self._tab_ids.get(view)
         if tab_id is not None:
             tabs = self.query_one(TabbedContent)
-            tabs.get_tab(tab_id).label = view.tab_label
+            tabs.get_tab(tab_id).label = self._tab_label(view)
         if view is self.view:
             self.sub_title = view.status_text
 
@@ -202,7 +231,7 @@ class TmeldApp(App):
         self.views.append(view)
         self._tab_ids[view] = tab_id
         tabs = self.query_one(TabbedContent)
-        tabs.add_pane(TabPane(view.tab_label, view, id=tab_id))
+        tabs.add_pane(TabPane(self._tab_label(view), view, id=tab_id))
         tabs.active = tab_id
         self._update_single_class()
 
@@ -211,21 +240,29 @@ class TmeldApp(App):
         self.query_one(TabbedContent).set_class(open_count == 1, "single")
 
     def action_close_tab(self) -> None:
-        view = self.view
+        self._request_close(self.view)
+
+    def action_close_tab_by_id(self, tab_id: str) -> None:
+        """Target of the ✕ in each tab label."""
+        for view, known_id in self._tab_ids.items():
+            if known_id == tab_id:
+                self._request_close(view)
+                return
+
+    def _request_close(self, view: ComparisonView) -> None:
         if any(view.dirty) and self._close_pending is not view:
             # Meld prompts on unsaved changes; the TUI equivalent is a
             # confirm-by-repeat within the notification's lifetime
             self._close_pending = view
             self.notify(
-                "Unsaved changes — press Ctrl+W again to close",
+                "Unsaved changes — close again to confirm",
                 severity="warning",
                 timeout=3,
             )
             self.set_timer(3, self._clear_close_pending)
             return
         self._close_pending = None
-        open_views = [v for v in self.views if self._tab_ids.get(v)]
-        if len(open_views) == 1:
+        if len(self._tab_ids) == 1:
             self.exit()
             return
         tab_id = self._tab_ids.pop(view)
