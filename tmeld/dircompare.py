@@ -7,9 +7,8 @@ Provenance (identical behavior is the point, as with the diff engine):
     meld/dirdiff.py:68-260 (module-level, UI-free already).
   * ComparisonOptions and CanonicalListing are copied verbatim from
     dirdiff.py:284-341.
-  * The STATE_* constants are meld/vc/_vc.py:46-62 (PARITY.md §2 keys
-    tree styling off them); re-point to the vendored vc package when
-    Phase 7 vendors it.
+  * The STATE_* constants are re-exported from the vendored
+    meld/vc/_vc.py (PARITY.md §2 keys tree styling off them).
   * DirComparison.scan_iter is a UI-free port of
     DirDiff._search_recursively_iter (dirdiff.py:967) and _entry_state
     of _update_item_state (dirdiff.py:1797).
@@ -31,30 +30,24 @@ from mmap import ACCESS_COPY, mmap
 from typing import Dict, Iterator, List, Optional, Sequence, Tuple
 
 from tmeld._vendor.meld.filters import FilterEntry
-from tmeld.misc import all_same, apply_text_filters
-
-# Tree states (upstream meld/vc/_vc.py:46; comments theirs)
-# ignored, new, normal, ignored changes,
-# error, placeholder, vc added
-# vc modified, vc renamed, vc conflict, vc removed
-# locally removed, end
-(
-    STATE_IGNORED,
-    STATE_NONE,
-    STATE_NORMAL,
-    STATE_NOCHANGE,
-    STATE_ERROR,
-    STATE_EMPTY,
-    STATE_NEW,
-    STATE_MODIFIED,
-    STATE_RENAMED,
+from tmeld._vendor.meld.vc._vc import (  # noqa: F401 (re-exported states)
     STATE_CONFLICT,
-    STATE_REMOVED,
-    STATE_MISSING,
-    STATE_NONEXIST,
-    STATE_SPINNER,
+    STATE_EMPTY,
+    STATE_ERROR,
+    STATE_IGNORED,
     STATE_MAX,
-) = list(range(15))
+    STATE_MISSING,
+    STATE_MODIFIED,
+    STATE_NEW,
+    STATE_NOCHANGE,
+    STATE_NONE,
+    STATE_NONEXIST,
+    STATE_NORMAL,
+    STATE_REMOVED,
+    STATE_RENAMED,
+    STATE_SPINNER,
+)
+from tmeld.misc import all_same, apply_text_filters
 
 
 class StatItem(namedtuple("StatItem", "mode size time")):

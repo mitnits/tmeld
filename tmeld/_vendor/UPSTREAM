@@ -7,3 +7,11 @@ files:
   - meld/matchers/merge.py
   - meld/matchers/helpers.py
   - meld/filters.py
+  - meld/vc/__init__.py
+  - meld/vc/_vc.py
+  - meld/vc/git.py
+  - meld/vc/bzr.py
+  - meld/vc/cvs.py
+  - meld/vc/darcs.py
+  - meld/vc/mercurial.py
+  - meld/vc/svn.py

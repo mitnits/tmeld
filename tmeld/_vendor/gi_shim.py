@@ -7,6 +7,8 @@ enough of both, with a pluggable scheduler so the TUI can route idle
 callbacks onto its own event loop.
 """
 
+import os
+import stat as _stat
 from typing import Any, Callable, Optional
 
 
@@ -56,8 +58,23 @@ def set_idle_scheduler(scheduler: Optional[Callable[..., Any]]) -> None:
     _idle_scheduler = scheduler
 
 
+class _GLibError(Exception):
+    """GLib.Error lookalike, as raised by the Gio shim below."""
+
+    def __init__(self, message: str = "", domain: str = "g-io-error-quark",
+                 code: int = 0) -> None:
+        super().__init__(message)
+        self.domain = domain
+        self.code = code
+
+    def matches(self, domain: str, code: int) -> bool:
+        return self.domain == domain and self.code == code
+
+
 class GLib:
     """Namespace mirroring gi.repository.GLib as used by meld code."""
+
+    Error = _GLibError
 
     @staticmethod
     def idle_add(callback: Callable, *args: Any) -> None:
@@ -65,3 +82,98 @@ class GLib:
             _idle_scheduler(callback, *args)
         else:
             callback(*args)
+
+
+# --- Gio: just the file-info surface meld/vc/_vc.py touches -----------------
+# (Vc.get_entries enumerates a directory; Vc.get_entry stats one path.)
+
+
+class _GioFileInfo:
+    def __init__(self, name: str, is_dir: bool) -> None:
+        self._name = name
+        self._is_dir = is_dir
+
+    def get_name(self) -> str:
+        return self._name
+
+    def get_display_name(self) -> str:
+        return self._name
+
+    def get_file_type(self) -> int:
+        return Gio.FileType.DIRECTORY if self._is_dir else Gio.FileType.REGULAR
+
+
+class _GioFileEnumerator:
+    def __init__(self, base: str, entries) -> None:
+        self._base = base
+        self._entries = entries
+
+    def __iter__(self):
+        return iter(self._entries)
+
+    def get_child(self, file_info: _GioFileInfo) -> "_GioFile":
+        return _GioFile(os.path.join(self._base, file_info.get_name()))
+
+
+class _GioFile:
+    def __init__(self, path: str) -> None:
+        self._path = path
+
+    def get_path(self) -> str:
+        return self._path
+
+    def enumerate_children(self, attrs, flags, cancellable) -> _GioFileEnumerator:
+        try:
+            with os.scandir(self._path) as scan:
+                # NOFOLLOW_SYMLINKS is the only flag callers pass
+                entries = [
+                    _GioFileInfo(e.name, e.is_dir(follow_symlinks=False))
+                    for e in scan
+                ]
+        except PermissionError as err:
+            raise _GLibError(
+                str(err), code=Gio.IOErrorEnum.PERMISSION_DENIED
+            ) from err
+        except OSError as err:
+            raise _GLibError(str(err), code=Gio.IOErrorEnum.FAILED) from err
+        return _GioFileEnumerator(self._path, entries)
+
+    def query_info(self, attrs, flags, cancellable) -> _GioFileInfo:
+        try:
+            st_result = os.lstat(self._path)
+        except OSError as err:
+            raise _GLibError(
+                str(err), code=Gio.IOErrorEnum.NOT_FOUND
+            ) from err
+        return _GioFileInfo(
+            os.path.basename(self._path) or self._path,
+            _stat.S_ISDIR(st_result.st_mode),
+        )
+
+
+class Gio:
+    """Namespace mirroring gi.repository.Gio as used by meld code."""
+
+    class FileType:
+        UNKNOWN = 0
+        REGULAR = 1
+        DIRECTORY = 2
+        SYMBOLIC_LINK = 3
+
+    class FileQueryInfoFlags:
+        NONE = 0
+        NOFOLLOW_SYMLINKS = 1
+
+    class IOErrorEnum:
+        FAILED = 0
+        NOT_FOUND = 1
+        PERMISSION_DENIED = 14
+
+    class File:
+        @staticmethod
+        def new_for_path(path: str) -> _GioFile:
+            return _GioFile(path)
+
+    @staticmethod
+    def io_error_quark() -> str:
+        return "g-io-error-quark"

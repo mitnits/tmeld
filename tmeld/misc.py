@@ -10,6 +10,7 @@ import collections
 import errno
 import os
 import shutil
+import subprocess
 from pathlib import PurePath
 from typing import (
     AnyStr,
@@ -65,6 +66,15 @@ def shorten_names(*names: str) -> List[str]:
         return [firstpart(p) + p.name for p in paths]
 
     return [name or "[None]" for name in basenames]
+
+
+def get_hide_window_startupinfo():
+    if os.name != "nt":
+        return None
+
+    startupinfo = subprocess.STARTUPINFO()
+    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    return startupinfo
 
 
 def copy2(src: str, dst: str) -> None:
