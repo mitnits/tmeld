@@ -61,6 +61,14 @@ class TmeldApp(App):
     TabbedContent.single Tabs {
         display: none;
     }
+    DiffPane {
+        width: 1fr;
+        border: none;
+        border-top: round $border;
+    }
+    DiffPane:focus {
+        border-top: round $accent;
+    }
     """
 
     BINDINGS = [

@@ -67,3 +67,34 @@ def test_chunk_navigation_scrolls_both_panes(paths):
     # b has one insert and one delete before line ~100: net offset 0,
     # but interpolation may differ by a line near chunk edges
     assert abs(y1 - y0) <= 2
+
+
+def test_focus_border_does_not_leak_from_textarea_defaults(paths):
+    """Regression: with pane CSS in DEFAULT_CSS instead of App.CSS,
+    TextArea's built-in `TextArea:focus {border: ...}` outranked our
+    `border: none` and painted full-height dark/accent columns beside
+    the focused pane — visible only while the terminal window had focus
+    (blur removes :focus). The rules must stay in TmeldApp.CSS."""
+
+    async def run():
+        app = TmeldApp(paths)
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.pause()
+            assert app.focused is app.panes[0]
+            return app.export_screenshot()
+
+    svg = asyncio.run(run())
+    # The leak painted near-full-height columns (~22 cells at one x) in
+    # Textual's default border colors. Scrollbar handles legitimately
+    # use the accent color, but only for a few cells at one position.
+    import re
+    from collections import Counter
+
+    for color in ("#121212", "#0178d4"):
+        xs = Counter(
+            x for x in re.findall(
+                r'<rect fill="%s" x="([\d.]+)"' % color, svg
+            )
+        )
+        tallest = max(xs.values(), default=0)
+        assert tallest < 15, f"{color} column of {tallest} cells: border leak"

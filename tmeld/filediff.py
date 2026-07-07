@@ -45,16 +45,11 @@ SCROLL_INFLUENCE: Dict[int, tuple] = {
 
 
 class FileDiffView(ComparisonView):
-    DEFAULT_CSS = """
-    FileDiffView DiffPane {
-        width: 1fr;
-        border: none;
-        border-top: round $border;
-    }
-    FileDiffView DiffPane:focus {
-        border-top: round $accent;
-    }
-    """
+    # NOTE: DiffPane border/width rules live in TmeldApp.CSS, not here.
+    # App CSS outranks every widget's DEFAULT_CSS, but DEFAULT_CSS rules
+    # compete among themselves by specificity — TextArea's built-in
+    # `TextArea:focus {border: ...}` would beat a plain descendant rule
+    # and regrow a full focus border (the "black bar" regression).
 
     def __init__(
         self,
