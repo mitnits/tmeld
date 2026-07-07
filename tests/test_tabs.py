@@ -297,3 +297,42 @@ def test_clicking_close_button_closes_without_crash(pair):
             assert app.is_running
 
     run(scenario())
+
+
+def test_tab_strip_overflow_arrows(pair):
+    # eight tabs in 60 columns cannot fit; Meld-style shift arrows
+    # appear top-right and scroll the strip
+    diffs = [(pair([f"l{i}"], [f"r{i}"]), None) for i in range(8)]
+
+    async def scenario():
+        from tmeld.app import TabArrows
+
+        app = TmeldApp(diffs=diffs)
+        async with app.run_test(size=(60, 20)) as pilot:
+            await pilot.pause()
+            arrows = app.query_one(TabArrows)
+            assert arrows.display
+            inner = app.query_one(Tabs).query_one("#tabs-scroll")
+            assert inner.scroll_offset.x == 0
+            app.action_scroll_tabs_right()
+            await pilot.pause()
+            assert inner.scroll_offset.x > 0
+            app.action_scroll_tabs_left()
+            await pilot.pause()
+            assert inner.scroll_offset.x == 0
+
+    run(scenario())
+
+
+def test_tab_arrows_hidden_when_tabs_fit(pair):
+    diffs = [(pair([f"l{i}"], [f"r{i}"]), None) for i in range(2)]
+
+    async def scenario():
+        from tmeld.app import TabArrows
+
+        app = TmeldApp(diffs=diffs)
+        async with app.run_test(size=(120, 20)) as pilot:
+            await pilot.pause()
+            assert not app.query_one(TabArrows).display
+
+    run(scenario())

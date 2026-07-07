@@ -23,7 +23,8 @@ from typing import List, Optional, Sequence, Tuple
 from textual.app import App, ComposeResult
 from textual.markup import escape
 from textual.binding import Binding
-from textual.widgets import Footer, TabbedContent, TabPane, Tabs
+from textual import events
+from textual.widgets import Footer, Static, TabbedContent, TabPane, Tabs
 
 from tmeld import __version__
 from tmeld.comparisonview import ComparisonView
@@ -52,14 +53,38 @@ def make_view(
     return FileDiffView(paths, theme_def, output=output)
 
 
+class TabArrows(Static):
+    """Meld's notebook shift arrows: shown top-right when the tab strip
+    overflows; each ◀/▶ scrolls the strip (markup @click actions)."""
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(
+            "[@click=app.scroll_tabs_left]◀[/]"
+            "[@click=app.scroll_tabs_right] ▶[/]",
+            **kwargs,
+        )
+
+
 class TmeldApp(App):
     TITLE = "tmeld"
 
     CSS = """
+    Screen {
+        layers: base tabarrows;
+    }
     TabPane {
         padding: 0;
     }
     TabbedContent.single Tabs {
+        display: none;
+    }
+    TabArrows {
+        layer: tabarrows;
+        dock: right;
+        width: 4;
+        height: 1;
+        content-align: right middle;
+        color: $text-muted;
         display: none;
     }
     DiffPane {
@@ -172,11 +197,13 @@ class TmeldApp(App):
             for view in self.views:
                 with TabPane(self._tab_label(view), id=self._tab_ids[view]):
                     yield view
+        yield TabArrows(id="tab-arrows")
         yield Footer()
 
     def on_mount(self) -> None:
         self.view.focus_default()
         self._harden_tab_activation()
+        self.call_after_refresh(self._update_tab_arrows)
 
     def _harden_tab_activation(self) -> None:
         """Clicking a tab's ✕ removes the tab while the Tab.Clicked
@@ -214,6 +241,8 @@ class TmeldApp(App):
         if tab_id is not None:
             tabs = self.query_one(TabbedContent)
             tabs.get_tab(tab_id).label = self._tab_label(view)
+            # a longer/shorter label can tip the strip into overflow
+            self.call_after_refresh(self._update_tab_arrows)
         if view is self.view:
             self.sub_title = view.status_text
 
@@ -238,6 +267,52 @@ class TmeldApp(App):
     def _update_single_class(self) -> None:
         open_count = len(self._tab_ids)
         self.query_one(TabbedContent).set_class(open_count == 1, "single")
+        self._update_tab_arrows()
+
+    # --- Tab-strip overflow (Meld's notebook shift arrows) -------------------
+
+    def _tab_strip_overflow(self) -> int:
+        """How many cells of tab labels don't fit; 0 when they all do."""
+        tabs = self.query_one(Tabs)
+        if not tabs.display:
+            return 0
+        bar = tabs.query_one("#tabs-list-bar")
+        scroll = tabs.query_one("#tabs-scroll")
+        return max(0, bar.region.width - scroll.region.width)
+
+    def _update_tab_arrows(self) -> None:
+        self.query_one(TabArrows).display = self._tab_strip_overflow() > 0
+
+    def on_resize(self, event: events.Resize) -> None:
+        self.call_after_refresh(self._update_tab_arrows)
+
+    def _scroll_tab_strip(self, direction: int) -> None:
+        scroll = self.query_one(Tabs).query_one("#tabs-scroll")
+        # force: the strip container is overflow:hidden, and non-forced
+        # scrolls are refused for non-scrollable containers
+        scroll.scroll_relative(x=direction * 16, animate=False, force=True)
+
+    def action_scroll_tabs_left(self) -> None:
+        self._scroll_tab_strip(-1)
+
+    def action_scroll_tabs_right(self) -> None:
+        self._scroll_tab_strip(1)
+
+    def on_mouse_scroll_down(self, event: events.MouseScrollDown) -> None:
+        self._wheel_over_tabs(event, +1)
+
+    def on_mouse_scroll_up(self, event: events.MouseScrollUp) -> None:
+        self._wheel_over_tabs(event, -1)
+
+    def _wheel_over_tabs(self, event, direction: int) -> None:
+        """The strip's own container is overflow:hidden, so wheel events
+        bubble up unhandled; scroll it when the pointer is over it."""
+        tabs = self.query_one(Tabs)
+        if tabs.display and tabs.region.contains(
+            event.screen_x, event.screen_y
+        ):
+            self._scroll_tab_strip(direction)
+            event.stop()
 
     def action_close_tab(self) -> None:
         self._request_close(self.view)
