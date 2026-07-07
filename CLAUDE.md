@@ -121,6 +121,12 @@ working context that isn't in either.
   on a file row posts OpenComparison; shell opens a FileDiffView tab.
   Widget.tree is taken by Textual — the attr is view.dirtree. 108
   tests green. Demo dirs: /tmp/tmeld-demo/project-{a,b}.
+- GOTCHA (black-bar regression, fixed be70dc4): rules that override a
+  Textual widget's built-in styling (e.g. TextArea's :focus border)
+  MUST live in TmeldApp.CSS — App CSS outranks all DEFAULT_CSS, but a
+  view's DEFAULT_CSS competes with the widget's own by specificity and
+  loses to pseudo-class rules. Symptom was focus-dependent (terminal
+  blur removes :focus). Regression test in test_app.py.
 - Still open: chunk boundary lines (underline approx), Phase 4 linkmap,
   Phase 7 VC view, Phase 8 graphics, dirdiff polish (F8 state/name
   filter toggles, compare-marked, size/mtime columns, empty-folder
