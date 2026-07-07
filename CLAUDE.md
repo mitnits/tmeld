@@ -188,6 +188,10 @@ working context that isn't in either.
   auto-forward printed localhost:PORT), (3) opt-in outbound-wss relay
   with E2E key in the URL fragment (relay sees ciphertext only —
   magic-wormhole pattern). Taste today: `textual serve "tmeld a b"`.
+  Related (user, 2026-07-07): awrit (github.com/chase/awrit, archived
+  but forked) renders Chromium in-terminal via kitty graphics — bmeld
+  served on localhost + awrit-style renderer = graphical meld without
+  leaving the terminal. bmeld's server work pays off in both worlds.
 - PINNED idea (user, 2026-07-07): shrink terminal font while tmeld
   runs to fit more text — doable opt-in per terminal: iTerm2 OSC 1337
   SetProfile=<name> (needs a user-made small-font profile + a restore
