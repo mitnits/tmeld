@@ -1,0 +1,7 @@
+tmeld (0.4.0) unstable; urgency=medium
+
+  * First Debian packaging of tmeld.
+  * Upstream 0.4.0: 2/3-way file merge, folder comparison, VC view,
+    tabbed shell, Tier-2 pixel linkmap (sixel/kitty graphics).
+
+ -- mitnits <alexa.mitnitski@gmail.com>  Tue, 07 Jul 2026 20:37:49 +0300

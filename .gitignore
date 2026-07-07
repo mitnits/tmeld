@@ -5,3 +5,11 @@ __pycache__/
 .tmp/
 *.egg-info/
 .env
+debian/tmeld/
+debian/vendor/
+debian/files
+debian/*.substvars
+debian/.debhelper/
+debian/debhelper-build-stamp
+build/
+dist/

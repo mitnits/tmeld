@@ -1,0 +1,16 @@
+.TH TMELD-DUMP 1 "July 2026" "tmeld 0.4.0" "User Commands"
+.SH NAME
+tmeld-dump \- print tmeld's chunk model for a comparison as JSON
+.SH SYNOPSIS
+.B tmeld-dump
+\fIFILE\fR \fIFILE\fR [\fIFILE\fR]
+.SH DESCRIPTION
+.B tmeld-dump
+runs the vendored Meld diff engine on two or three files and prints
+the resulting chunk model as JSON: per-chunk tags (insert, delete,
+replace, conflict) and line ranges per pane. It is a debugging and
+scripting aid for
+.BR tmeld (1)
+and produces no UI.
+.SH SEE ALSO
+.BR tmeld (1)

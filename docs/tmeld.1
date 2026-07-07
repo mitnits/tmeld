@@ -1,0 +1,71 @@
+.TH TMELD 1 "July 2026" "tmeld 0.4.0" "User Commands"
+.SH NAME
+tmeld \- Meld, in your terminal: TUI diff and merge tool
+.SH SYNOPSIS
+.B tmeld
+[\fIOPTIONS\fR] \fIPATH\fR [\fIPATH\fR [\fIPATH\fR]]
+[\fB\-\-diff\fR \fIPATH\fR...]...
+.SH DESCRIPTION
+.B tmeld
+is a faithful terminal port of the GNOME Meld visual diff and merge
+tool, using Meld's own diff engine. It supports two- and three-way
+file comparison and merging, folder comparison, and a version-control
+working-copy view \(em over plain SSH.
+.PP
+The comparison type is chosen from the arguments, as in Meld: two or
+three files open a file comparison (three-way argument order is
+\fILOCAL MERGED REMOTE\fR, the git mergetool convention \(em the middle
+pane is the merged file); two or three directories open a folder
+comparison; a single path opens the version-control view of the
+enclosing working copy (git, mercurial, bzr, svn, darcs, cvs).
+.SH OPTIONS
+.TP
+.BR \-o ", " \-\-output " " \fIFILE\fR
+Write middle-pane saves to \fIFILE\fR instead of the middle path
+(three-way file comparison only, like \fBmeld \-o\fR).
+.TP
+.BR \-\-diff " " \fIPATH\fR...
+Open an extra comparison tab for 1-3 paths. May be repeated.
+.TP
+.BR \-\-theme " " \fIname\fR
+Color scheme: \fBmeld-base\fR (default) or \fBmeld-dark\fR, both using
+Meld's exact palette.
+.TP
+.BR \-\-graphics " " \fImode\fR
+Pixel linkmap protocol: \fBauto\fR (default; probes the terminal at
+startup), \fBnone\fR, \fBsixel\fR or \fBkitty\fR. On capable terminals
+the gutter between panes shows Meld's anti-aliased connector curves
+and the overview map gains pixel resolution.
+.TP
+.B \-\-version
+Print the version and exit.
+.SH KEYS
+Keybindings follow Meld: Alt+Down/Alt+Up (or Ctrl+D/Ctrl+E) navigate
+changes, Alt+Left/Alt+Right push chunks, Alt+Shift+arrows pull,
+Alt+Delete deletes a chunk, Ctrl+K/Ctrl+J navigate conflicts, Alt+M
+merges all non-conflicting chunks, Ctrl+S saves, Ctrl+W closes a tab,
+Ctrl+R or F5 refreshes, Ctrl+Q quits. In the version-control view,
+\fBc\fR commits and \fBr\fR reverts. See the README for the full
+table. On macOS terminals, configure Option to send Esc+.
+.SH EXIT STATUS
+For three-way comparisons the exit status is 0 only if the merged
+(middle) file was saved, satisfying the git mergetool contract; other
+comparisons exit 0.
+.SH EXAMPLES
+.TP
+Compare two files:
+.B tmeld a.py b.py
+.TP
+Resolve a merge as git mergetool (with trustExitCode):
+.B tmeld $LOCAL $MERGED $REMOTE
+.TP
+Compare folders:
+.B tmeld dirA/ dirB/
+.TP
+Working-copy status view:
+.B tmeld .
+.SH SEE ALSO
+.BR meld (1),
+.BR git-mergetool (1)
+.PP
+Full documentation: https://github.com/mitnits/tmeld

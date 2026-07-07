@@ -1,0 +1,31 @@
+Source: tmeld
+Section: utils
+Priority: optional
+Maintainer: mitnits <alexa.mitnitski@gmail.com>
+Build-Depends: debhelper-compat (= 13),
+               python3,
+               python3-pip,
+               python3-setuptools (>= 68),
+Standards-Version: 4.7.0
+Homepage: https://github.com/mitnits/tmeld
+Vcs-Git: https://github.com/mitnits/tmeld.git
+Vcs-Browser: https://github.com/mitnits/tmeld
+
+Package: tmeld
+Architecture: all
+Depends: python3 (>= 3.10)
+Recommends: git
+Suggests: meld
+Description: Meld, in your terminal - TUI diff and merge tool
+ A faithful terminal port of GNOME Meld: the same diff engine (vendored
+ verbatim from Meld), the same colors, the same keybindings - usable
+ over plain SSH.
+ .
+ Features two- and three-way file comparison and merging with the git
+ mergetool contract, folder comparison, a version-control status view,
+ and anti-aliased linkmap graphics on sixel or kitty-graphics capable
+ terminals.
+ .
+ This package bundles its Python dependencies (Textual and friends)
+ under /usr/share/tmeld because tmeld requires newer versions than
+ Debian ships; it does not interfere with system Python packages.

@@ -205,6 +205,18 @@ working context that isn't in either.
   Still to do to actually publish: pick repo host + push, `twine
   upload`, README not-affiliated note is in; courtesy note to Meld
   maintainers after publishing.
+- Debian packaging done: debian/ (debhelper 13, source format "3.0
+  (native)", version has NO -1 revision). KEY CONSTRAINT: Debian 13
+  ships python3-textual 2.1.2, tmeld needs >=8 — so the deb BUNDLES
+  pip-fetched deps under /usr/share/tmeld/lib (Architecture: all, pure
+  python; build needs network) with sys.path-inserting launchers in
+  debian/launchers/. Not suitable for the Debian archive as-is (noted
+  in rules header). Build: dpkg-buildpackage -us -uc -b; lintian
+  clean (bundled .py files get shebangs stripped + exec bits dropped —
+  lintian flags '#!python' even on 0644 files). Manpages in docs/*.1.
+  CI has a deb job (build + lintian + install smoke test). The .deb is
+  attached to the GitHub release. dpkg's /usr/bin/tmeld is shadowed by
+  ~/.local/bin/tmeld (dev symlink) on mini — intended.
 - Still open: chunk boundary lines (underline approx), Phase 4 Tier-1
   text linkmap (braille/box approx — may be moot given Tier 2),
   dirdiff polish (F8 state/name filter toggles, compare-marked,

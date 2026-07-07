@@ -1,0 +1,36 @@
+#!/usr/bin/make -f
+# tmeld bundles its Python deps under /usr/share/tmeld/lib because it
+# needs textual >= 8 and Debian ships 2.x. All deps are pure Python,
+# hence Architecture: all. NOTE: building this package downloads the
+# pinned dependencies from PyPI (out-of-archive package; not suitable
+# for the Debian archive as-is).
+
+VENDOR := debian/vendor
+DESTLIB := debian/tmeld/usr/share/tmeld/lib
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+
+override_dh_auto_build:
+	pip3 install --target $(VENDOR) --no-compile --no-build-isolation --no-deps .
+	pip3 install --target $(VENDOR) --no-compile "textual>=8,<9"
+
+override_dh_auto_test:
+
+override_dh_auto_install:
+	install -d $(DESTLIB)
+	cp -a $(VENDOR)/. $(DESTLIB)/
+	rm -rf $(DESTLIB)/*.dist-info $(DESTLIB)/bin
+	# bundled libs are imported, never executed: drop exec bits and shebangs
+	find $(DESTLIB) -name '*.py' -perm /111 -exec chmod 0644 {} +
+	find $(DESTLIB) -name '*.py' -exec sed -i '1{/^\#!/d}' {} +
+	install -D -m 0755 debian/launchers/tmeld debian/tmeld/usr/bin/tmeld
+	install -D -m 0755 debian/launchers/tmeld-dump debian/tmeld/usr/bin/tmeld-dump
+
+override_dh_auto_clean:
+	rm -rf $(VENDOR)
+
+# Bundled libraries are intentional (see header); don't flatten them
+override_dh_python3:

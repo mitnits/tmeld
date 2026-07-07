@@ -19,6 +19,16 @@ tmeld a b --diff c d --diff x y  # extra comparison tabs (like meld --diff)
 tmeld --theme meld-dark a b      # Meld's dark scheme
 ```
 
+## Installing
+
+From PyPI: `pipx install tmeld` (or `pip install tmeld`).
+
+As a Debian package: grab `tmeld_*_all.deb` from the GitHub release
+and `sudo dpkg -i` it, or build it yourself with
+`dpkg-buildpackage -us -uc -b` (needs network: the build bundles the
+pinned Textual under `/usr/share/tmeld/lib`, since tmeld needs a newer
+Textual than Debian ships; system Python packages are untouched).
+
 ## Keys (Meld's own)
 
 | Action | Keys |

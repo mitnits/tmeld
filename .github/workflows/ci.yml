@@ -48,3 +48,27 @@ jobs:
         with:
           name: dist
           path: dist/
+
+  deb:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            debhelper devscripts lintian python3-pip python3-setuptools
+      - name: Build .deb
+        run: dpkg-buildpackage -us -uc -b
+      - name: Lintian
+        run: lintian ../tmeld_*_all.deb
+      - name: Install and smoke-test
+        run: |
+          sudo dpkg -i ../tmeld_*_all.deb
+          /usr/bin/tmeld --version
+          printf 'a\n' > /tmp/a; printf 'b\n' > /tmp/b
+          /usr/bin/tmeld-dump /tmp/a /tmp/b | grep -q replace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb
+          path: ../tmeld_*_all.deb

@@ -1,0 +1,10 @@
+#!/usr/bin/python3
+"""tmeld-dump launcher: runs against the bundled libraries."""
+import sys
+
+sys.path.insert(0, "/usr/share/tmeld/lib")
+
+from tmeld.dump import main
+
+if __name__ == "__main__":
+    sys.exit(main())
