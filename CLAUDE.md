@@ -176,6 +176,18 @@ working context that isn't in either.
   tmeld/overlay.py GraphicsOverlay mixin (gutter + chunkmap).
   GOTCHA: on_tab_hidden can arrive after the view is unmounted —
   query(), not query_one(), for overlay widgets.
+- PINNED idea (user, 2026-07-07): "bmeld" — browser-based meld: `bmeld
+  args` prints a clickable link, UI in browser. Design sketch agreed:
+  engine stays server-side (vendored, unchanged); UI = CodeMirror
+  merge / Monaco diff speaking a chunk-model + edit-ops websocket
+  protocol; process stays alive for the mergetool exit-code contract.
+  Transport TIERS like graphics: (1) direct localhost+token — works
+  whenever the user can reach the port (their normal case, via ssh -L
+  / LAN; `ssh -O forward` adds to a live ControlMaster session), (2)
+  SSH-detected hint printing the forward one-liner (VS Code terminals
+  auto-forward printed localhost:PORT), (3) opt-in outbound-wss relay
+  with E2E key in the URL fragment (relay sees ciphertext only —
+  magic-wormhole pattern). Taste today: `textual serve "tmeld a b"`.
 - PINNED idea (user, 2026-07-07): shrink terminal font while tmeld
   runs to fit more text — doable opt-in per terminal: iTerm2 OSC 1337
   SetProfile=<name> (needs a user-made small-font profile + a restore
