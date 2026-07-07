@@ -198,3 +198,49 @@ def test_output_with_dirs_rejected(dirs, tmp_path):
     with pytest.raises(SystemExit) as exc:
         main(["-o", "out", dirs[0], dirs[1], str(third)])
     assert exc.value.code == 2
+
+
+def test_single_click_toggles_folder_row(dirs, tmp_path):
+    # sub-folder present on both sides
+    for side in ("left", "right"):
+        sub = tmp_path / side / "sub"
+        sub.mkdir()
+        (sub / "f.txt").write_text("f\n")
+
+    async def scenario():
+        app = TmeldApp(list(dirs))
+        async with app.run_test(size=(80, 24)) as pilot:
+            await scanned(app)
+            await pilot.pause()
+            tree = app.view.dirtree
+            sub_row = row_index(tree, "sub")
+            assert not any(k == ("sub",) for _e, _d, k in tree.rows
+                           if _e.names[0] == "f.txt")
+            await pilot.click(DirTree, offset=(5, sub_row))
+            await pilot.pause()
+            assert tree.cursor == sub_row
+            assert any(e.names[0] == "f.txt" for e, _d, _k in tree.rows)
+            await pilot.click(DirTree, offset=(5, sub_row))
+            await pilot.pause()
+            assert not any(e.names[0] == "f.txt" for e, _d, _k in tree.rows)
+
+    run(scenario())
+
+
+def test_single_click_file_selects_double_click_compares(dirs):
+    async def scenario():
+        app = TmeldApp(list(dirs))
+        async with app.run_test(size=(80, 24)) as pilot:
+            await scanned(app)
+            await pilot.pause()
+            tree = app.view.dirtree
+            file_row = row_index(tree, "changed.txt")
+            await pilot.click(DirTree, offset=(5, file_row))
+            await pilot.pause()
+            assert tree.cursor == file_row
+            assert len(app.views) == 1  # single click: select only
+            await pilot.click(DirTree, offset=(5, file_row), times=2)
+            await pilot.pause()
+            assert len(app.views) == 2  # double click: open comparison
+
+    run(scenario())

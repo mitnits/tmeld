@@ -301,6 +301,15 @@ class DirTree(ScrollView):
         pane = min(event.x // (col_width + divider_width), self.num_panes - 1)
         self.focus_pane = pane
         self._move_cursor(row_index)
+        entry = self.rows[row_index][0]
+        if entry.isdir:
+            # Single click expands/collapses a folder row (Meld's
+            # expander is single-click; user round 6 extends it to the
+            # whole line). chain==2 is the tail of a double click whose
+            # first click already toggled — swallow it, don't re-toggle.
+            if event.chain == 1:
+                self.toggle_dir(row_index)
+            return
         if event.chain == 2:
             self.action_activate()
         else:
