@@ -25,9 +25,11 @@ working context that isn't in either.
 - **Primary dev machine: mini** (Debian 13, this repo at `~/tmeld`,
   Python 3.13.5, venv at `.venv` with textual 8.2.8 + pytest + editable
   install). Development moved here from Windows on 2026-07-06 — see
-  HANDOFF.md. Bare repo at `~/git/tmeld.git` (remote `origin`); push
-  there after each coherent step. The old Windows clone
-  (C:\Users\roman\projects\Meld, remote name `mini`) may be stale.
+  HANDOFF.md. Bare repo at `~/git/tmeld.git` (remote `origin`); PUBLIC
+  repo at github.com/mitnits/tmeld (remote `github`, created
+  2026-07-07, CI = GitHub Actions). Push BOTH remotes (+ --tags) after
+  each coherent step. The old Windows clone (C:\Users\roman\projects\
+  Meld, remote name `mini`) may be stale.
 - Tests: `.venv/bin/python -m pytest` (all green expected). Run the app:
   `.venv/bin/tmeld a b` or the `~/.local/bin/tmeld` symlink.
 - `upstream/` is a pinned Meld checkout @ 9c4be506 (gitignored) — the
