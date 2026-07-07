@@ -90,5 +90,17 @@ working context that isn't in either.
   71 tests green. Demo files: /tmp/local.py /tmp/base.py /tmp/remote.py.
 - User verdict 2026-07-07: 3-way merge works fine hands-on (moves, saves).
   v0.2.0 tag = user-validated high-water mark.
+- Tabbed shell + multi-pair diff done (user caught the gap — `--diff` was
+  in no phase): app.py split into shell (tabs, window-level bindings that
+  delegate to the active view, CLI) and tmeld/filediff.py FileDiffView
+  (everything one comparison owns; named after upstream). `tmeld a b
+  --diff c d` = extra tabs, positional first (upstream meldapp order);
+  tab labels = misc.shorten_names ported verbatim (tmeld/misc.py) joined
+  " — " with '*' on dirty panes; tab bar hidden when single. Ctrl+W close
+  (press twice if unsaved — TUI stand-in for Meld's save prompt),
+  Ctrl+Alt+PgDn/PgUp cycle. exit_status aggregates over ALL views incl.
+  closed tabs (closing an unsaved merge tab = mergetool failure). Tests
+  rely on app.panes/comparison/dirty delegating to the active view.
+  88 tests green.
 - Still open: chunk boundary lines (underline approx), Phase 4 linkmap,
   Phase 6 dirdiff, Phase 7 VC view, Phase 8 graphics.

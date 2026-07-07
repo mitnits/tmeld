@@ -7,6 +7,7 @@ over plain SSH. Two- and three-way file comparison and merging.
 ```
 tmeld a.py b.py                  # 2-way compare/edit
 tmeld local.py base.py remote.py # 3-way merge (middle = merged file)
+tmeld a b --diff c d --diff x y  # extra comparison tabs (like meld --diff)
 tmeld --theme meld-dark a b      # Meld's dark scheme
 ```
 
@@ -23,6 +24,8 @@ tmeld --theme meld-dark a b      # Meld's dark scheme
 | Merge all non-conflicting (3-way) | Alt+M |
 | Save | Ctrl+S |
 | Next / previous pane | Alt+PgDn / Alt+PgUp |
+| Close tab | Ctrl+W (twice if unsaved) |
+| Next / previous tab | Ctrl+Alt+PgDn / Ctrl+Alt+PgUp |
 | Quit | Ctrl+Q |
 
 Gutter arrows between panes are clickable (they push the chunk); the
