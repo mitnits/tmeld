@@ -14,8 +14,15 @@ foreground color on the plain page background and are click targets.
 
 Panes keep a 1-row top border (title), so gutter row r corresponds to
 pane document line r + scroll - 1.
+
+Tier 2 (graphics terminals): the gutter widens to [▶][image area][◀]
+and Meld's anti-aliased linkmap connectors are painted into the middle
+as a kitty-graphics or sixel image after each refresh (tmeld/linkmap).
+The escape write bypasses Textual via app._driver.write — private API,
+same precedent as pane._set_theme; re-audit on textual bump.
 """
 
+import itertools
 from typing import Callable, Dict, List, Optional, Tuple
 
 from rich.segment import Segment
@@ -24,9 +31,19 @@ from textual import events
 from textual.strip import Strip
 from textual.widget import Widget
 
+from tmeld.linkmap import (
+    connectors_for_chunks,
+    kitty_delete_escape,
+    kitty_place_escape,
+    render_connectors,
+    sixel_escape,
+)
 from tmeld.palette import Theme
 
 PANE_BORDER_ROWS = 1
+
+# Width of the pixel-linkmap area, in cells, between the arrow columns
+GRAPHIC_IMAGE_COLS = 7
 
 PushCallback = Callable[[int, int, int], None]  # (src, dst, chunk_index)
 
@@ -41,6 +58,8 @@ class ActionGutter(Widget):
     ARROWS = ("▶", "◀")
     BORDER = "│"
 
+    _image_ids = itertools.count(100)
+
     def __init__(self, theme_def: Theme, **kwargs) -> None:
         super().__init__(**kwargs)
         self.theme_def = theme_def
@@ -52,6 +71,24 @@ class ActionGutter(Widget):
         # per column: {chunk start line: (merge-cache index, tag)}
         self._starts: List[Dict[int, tuple]] = [{}, {}]
         self.on_push: Optional[PushCallback] = None
+        # Tier 2 wiring (set by the view / read from the app on mount)
+        self.graphics = "none"
+        self.cell_px: Tuple[int, int] = (8, 16)
+        self.pair_changes: Optional[Callable[[], list]] = None
+        self.current_chunk_starts: Optional[Callable[[], frozenset]] = None
+        self._image_id = next(self._image_ids)
+        self._overlay_scheduled = False
+
+    def on_mount(self) -> None:
+        mode = getattr(self.app, "graphics", "none")
+        if mode in ("kitty", "sixel"):
+            self.graphics = mode
+            self.cell_px = getattr(self.app, "cell_px", (8, 16))
+            self.styles.width = 2 + GRAPHIC_IMAGE_COLS
+
+    def on_unmount(self) -> None:
+        if self.graphics == "kitty":
+            self._write(kitty_delete_escape(self._image_id))
 
     def set_starts(self, starts: List[Dict[int, tuple]]) -> None:
         """Per-column arrow positions from Comparison.action_starts:
@@ -88,17 +125,18 @@ class ActionGutter(Widget):
                     self.ARROWS[col],
                     Style(color=fg, bgcolor=self.theme_def.page_bg, bold=True),
                 )
-            elif in_pane[col]:
+            elif in_pane[col] and self.graphics == "none":
                 seg = Segment(self.BORDER, border_style)
             else:
                 seg = Segment(" ", page)
             segments.append(seg)
-        # Layout: [col0] [spacer] [col1]
-        segments.insert(1, Segment(" ", page))
+        # Layout: [col0] [image area / spacer] [col1]
+        spacer = Segment(" " * max(1, self.size.width - 2), page)
+        segments.insert(1, spacer)
         return Strip(segments)
 
     def on_click(self, event: events.Click) -> None:
-        if event.x == 1:
+        if 0 < event.x < self.size.width - 1:
             return
         col = 0 if event.x == 0 else 1
         entry = self._starts[col].get(self._doc_line(col, event.y))
@@ -106,3 +144,78 @@ class ActionGutter(Widget):
             return
         index, _tag = entry
         self.on_push(self.pane_pair[col], self.pane_pair[1 - col], index)
+
+    # --- Tier 2 pixel-linkmap overlay ----------------------------------------
+
+    def refresh_overlay(self) -> None:
+        """Schedule an overlay repaint after the next Textual frame (so
+        the image lands on top of freshly painted cells)."""
+        if self.graphics == "none" or self._overlay_scheduled:
+            return
+        self._overlay_scheduled = True
+        self.app.call_after_refresh(self._paint_overlay)
+
+    def clear_overlay(self) -> None:
+        if self.graphics == "kitty":
+            self._write(kitty_delete_escape(self._image_id))
+
+    def _paint_overlay(self) -> None:
+        self._overlay_scheduled = False
+        if (
+            self.graphics == "none"
+            or len(self.panes) != 2
+            or self.pair_changes is None
+            or not self.display
+        ):
+            return
+        region = self.content_region
+        image_cols = self.size.width - 2
+        image_rows = self.size.height - PANE_BORDER_ROWS
+        if image_cols <= 0 or image_rows <= 0 or not region.width:
+            return
+        cell_w, cell_h = self.cell_px
+        width_px, height_px = image_cols * cell_w, image_rows * cell_h
+        starts = (
+            self.current_chunk_starts()
+            if self.current_chunk_starts is not None else frozenset()
+        )
+        connectors = connectors_for_chunks(
+            self.pair_changes(),
+            scroll_f_px=int(self.panes[0].scroll_offset.y) * cell_h,
+            scroll_t_px=int(self.panes[1].scroll_offset.y) * cell_h,
+            line_height_px=cell_h,
+            current_chunk_starts=starts,
+        )
+        # Cull connectors entirely outside the viewport
+        connectors = [
+            c for c in connectors
+            if max(c.f1, c.t1) >= 0 and min(c.f0, c.t0) <= height_px
+        ]
+        background = (
+            None if self.graphics == "kitty"
+            else (self.theme_def.page_bg or "#000000")
+        )
+        rgba = render_connectors(
+            connectors, width_px, height_px, self.theme_def,
+            background=background,
+        )
+        if self.graphics == "kitty":
+            payload = kitty_place_escape(
+                self._image_id, rgba, width_px, height_px
+            )
+        else:
+            payload = sixel_escape(rgba, width_px, height_px)
+        # Save cursor, jump to the image cell, paint, restore
+        row, col = region.y + PANE_BORDER_ROWS, region.x + 1
+        self._write(f"\x1b7\x1b[{row + 1};{col + 1}H{payload}\x1b8")
+
+    def _write(self, escape: str) -> None:
+        driver = getattr(self.app, "_driver", None)
+        if driver is not None:
+            try:
+                driver.write(escape)
+            except Exception:
+                pass
+
+    def on_resize(self) -> None:
+        self.refresh_overlay()

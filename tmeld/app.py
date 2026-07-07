@@ -150,9 +150,15 @@ class TmeldApp(App):
         theme_name: str = DEFAULT_THEME,
         output: Optional[str] = None,
         diffs: Optional[Sequence[DiffSpec]] = None,
+        graphics: str = "none",
+        cell_px: Optional[Tuple[int, int]] = None,
     ):
         super().__init__()
         self.theme_def = THEMES[theme_name]
+        # Tier 2 pixel linkmap: "kitty" | "sixel" | "none" (gutters read
+        # these on mount)
+        self.graphics = graphics
+        self.cell_px = cell_px or (8, 16)
         if diffs is None:
             diffs = [(list(paths), output)]
         # Views are built here so file errors surface before the TUI
@@ -244,9 +250,13 @@ class TmeldApp(App):
         self, event: TabbedContent.TabActivated
     ) -> None:
         view = event.pane.query_one(ComparisonView)
+        previous = self._active_view
         self._active_view = view
+        if previous is not view:
+            previous.on_tab_hidden()
         self.sub_title = view.status_text
         view.focus_default()
+        view.on_tab_shown()
 
     def on_comparison_view_status_changed(
         self, message: ComparisonView.StatusChanged
@@ -469,6 +479,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "--theme", choices=sorted(THEMES), default=DEFAULT_THEME
     )
     parser.add_argument(
+        "--graphics", choices=("auto", "none", "sixel", "kitty"),
+        default="auto",
+        help="pixel linkmap protocol (auto probes the terminal at startup)",
+    )
+    parser.add_argument(
         "--version", action="version", version=f"tmeld {__version__}"
     )
     args = parser.parse_args(argv)
@@ -488,8 +503,22 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         diffs.append((args.files, args.output))
     diffs.extend((group, None) for group in args.diff)
 
+    graphics = args.graphics
+    if graphics == "auto":
+        from tmeld.term import probe_graphics
+
+        graphics = probe_graphics()
+    cell_px = None
+    if graphics != "none":
+        from tmeld.term import cell_pixel_size
+
+        cell_px = cell_pixel_size()
+
     try:
-        app = TmeldApp(theme_name=args.theme, diffs=diffs)
+        app = TmeldApp(
+            theme_name=args.theme, diffs=diffs,
+            graphics=graphics, cell_px=cell_px,
+        )
     except (OSError, ValueError) as e:
         parser.error(str(e))
     app.run()

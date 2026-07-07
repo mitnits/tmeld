@@ -48,6 +48,15 @@ middle-pane saves resolve the working file. `c` commits (Meld's Ctrl+M
 IS Enter in a terminal, so the mnemonic moved), `r` reverts, Delete
 deletes, Ctrl+R/F5 rescans.
 
+## Pixel linkmap (Tier 2)
+
+On terminals with graphics support, the gutter between panes widens
+and Meld's anti-aliased connector curves are drawn there as real
+pixels — kitty graphics protocol (kitty, WezTerm, Ghostty) or sixel
+(iTerm2, recent VTE), auto-detected at startup. `--graphics
+none|sixel|kitty` overrides the probe. Everything else stays
+cell-based; without graphics you keep the compact 3-column gutter.
+
 ## git mergetool
 
 tmeld follows Meld's convention: `tmeld $LOCAL $MERGED $REMOTE`, the

@@ -55,6 +55,13 @@ class ComparisonView(Horizontal):
         """Focus the view's natural first widget on tab activation."""
         raise NotImplementedError
 
+    def on_tab_shown(self) -> None:
+        """Called by the shell when this view's tab becomes active."""
+
+    def on_tab_hidden(self) -> None:
+        """Called by the shell when another tab takes over (views with
+        floating graphics clear them here)."""
+
     def merge_resolved(self) -> bool:
         """Mergetool contract: only unsaved 3-way file views fail."""
         return True

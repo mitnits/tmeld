@@ -128,6 +128,12 @@ class FileDiffView(ComparisonView):
             gutter.panes = [self.panes[k], self.panes[k + 1]]
             gutter.pane_pair = (k, k + 1)
             gutter.on_push = self._push_chunk
+            gutter.pair_changes = (
+                lambda k=k: self.comparison.pair_chunks(k, k + 1)
+            )
+            gutter.current_chunk_starts = (
+                lambda k=k: self._current_chunk_starts(k)
+            )
         chunkmap = self.query_one(ChunkMap)
         chunkmap.on_jump = self._jump_to_line
         chunkmap.pane = self.panes[1]
@@ -155,6 +161,7 @@ class FileDiffView(ComparisonView):
         self._apply_emphasis()
         for k, gutter in enumerate(self.gutters):
             gutter.set_starts(comparison.action_starts(k))
+            gutter.refresh_overlay()
         mid_chunks = comparison.pane_chunks(1)
         self.query_one(ChunkMap).set_chunks(
             [(c.tag, c.start_a, c.end_a) for c in mid_chunks],
@@ -170,6 +177,18 @@ class FileDiffView(ComparisonView):
 
     # --- Current chunk (Meld: the chunk containing the cursor) ------------
 
+    def _current_chunk_starts(self, pair_index: int) -> frozenset:
+        """(start_a, start_b) of the cursor chunk oriented to a gutter's
+        pane pair — the linkmap's emphasis key (upstream linkmap.py:129)."""
+        index = self.current_chunk
+        differ = self.comparison.differ
+        if index is None or not (0 <= index < differ.diff_count()):
+            return frozenset()
+        chunk = differ.get_chunk(index, pair_index, pair_index + 1)
+        if chunk is None:
+            return frozenset()
+        return frozenset({(chunk.start_a, chunk.start_b)})
+
     def _apply_emphasis(self) -> None:
         index = self.current_chunk
         differ = self.comparison.differ
@@ -182,6 +201,8 @@ class FileDiffView(ComparisonView):
                 pane.set_emphasis(range(chunk.start_a, chunk.end_a))
             else:
                 pane.set_emphasis(())
+        for gutter in self.gutters:
+            gutter.refresh_overlay()
 
     def on_text_area_selection_changed(
         self, event: TextArea.SelectionChanged
@@ -420,6 +441,7 @@ class FileDiffView(ComparisonView):
     def on_diff_pane_scrolled(self, message: DiffPane.Scrolled) -> None:
         for gutter in self.gutters:
             gutter.refresh()
+            gutter.refresh_overlay()
         self.query_one(ChunkMap).refresh()
         master = message.pane.pane_index
         master_pane = self.panes[master]
@@ -533,6 +555,15 @@ class FileDiffView(ComparisonView):
 
     def focus_default(self) -> None:
         self.panes[0].focus()
+
+    def on_tab_shown(self) -> None:
+        for gutter in self.gutters:
+            gutter.refresh_overlay()
+
+    def on_tab_hidden(self) -> None:
+        # kitty images float above cells; hide them with the tab
+        for gutter in self.gutters:
+            gutter.clear_overlay()
 
     def merge_resolved(self) -> bool:
         """Mergetool contract: a 3-way view succeeds only if saved."""

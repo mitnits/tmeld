@@ -146,9 +146,30 @@ working context that isn't in either.
   Enter in terminals); Ctrl+R/F5 = refresh (also dirdiff). CommitScreen
   = modal input; runner is sync subprocess + rescan. 123 tests green
   (incl. end-to-end conflict resolve against scratch git repos).
-- Still open: chunk boundary lines (underline approx), Phase 4 linkmap,
-  Phase 8 graphics + tier probe, dirdiff polish (F8 state/name filter
-  toggles, compare-marked, size/mtime columns), VC polish (push/update/
-  add/unstage actions, console output view, VC picker when multiple
-  repos overlap), Phase 9 backlog (find/replace, go-to-line, syntax,
-  config file, scrollbar theming).
+- Phase 8 done: Tier-2 pixel linkmap. tmeld/linkmap.py = pure-python
+  port of upstream linkmap.py geometry (bezier x_steps, ±0.5 nudges,
+  f1-1 "last pixel of previous line", fill + 1px line-color stroke +
+  current-chunk emphasis — ChunkStyle.line finally used) with a
+  column-coverage rasterizer (connectors are x-monotone: one vertical
+  span/column = exact vertical AA, no deps) + kitty (f=32, zlib,
+  stable image id = flicker-free replace) and sixel (quantized
+  palette, RLE) encoders. tmeld/term.py probes pre-Textual: kitty APC
+  query + DA1; sixel = DA1 param 4; cell px via TIOCGWINSZ (fallback
+  8x16). --graphics auto|none|sixel|kitty. Gutter in graphics mode =
+  [▶][7 img cols][◀] (arrows/clicks unchanged, divider dropped);
+  overlay painted via app._driver.write AFTER frames
+  (call_after_refresh + dedup flag), repainted on scroll/styling/
+  emphasis/resize/tab-shown; kitty images deleted on tab-hidden/
+  unmount (they float above cells; sixel self-heals). Perf: ~13ms
+  kitty / ~37ms sixel per repaint at 7x45 cells — fine; optimize
+  sixel indexing loop if user reports scroll lag. Untested on real
+  terminals as of writing — iTerm2 = sixel is the user's daily path.
+  Known gaps: modal over kitty image not cleared; probe adds ≤300ms
+  on terminals that never answer DA1.
+- Still open: chunk boundary lines (underline approx), Phase 4 Tier-1
+  text linkmap (braille/box approx — may be moot given Tier 2),
+  dirdiff polish (F8 state/name filter toggles, compare-marked,
+  size/mtime columns), VC polish (push/update/add/unstage actions,
+  console output view, VC picker when multiple repos overlap), Phase 9
+  backlog (find/replace, go-to-line, syntax, config file, scrollbar
+  theming), Tier 0 256-color degrade.
