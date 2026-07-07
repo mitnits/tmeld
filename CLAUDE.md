@@ -88,5 +88,7 @@ working context that isn't in either.
   Merger.merge_3_files, conflicts keep base). Merge-cache indices don't
   map 1:1 to per-pane chunk lists in 3-way — always differ.get_chunk.
   71 tests green. Demo files: /tmp/local.py /tmp/base.py /tmp/remote.py.
+- User verdict 2026-07-07: 3-way merge works fine hands-on (moves, saves).
+  v0.2.0 tag = user-validated high-water mark.
 - Still open: chunk boundary lines (underline approx), Phase 4 linkmap,
   Phase 6 dirdiff, Phase 7 VC view, Phase 8 graphics.
