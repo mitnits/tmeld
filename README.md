@@ -83,7 +83,15 @@ For diffs: `git difftool -x tmeld` or
     cmd = tmeld "$LOCAL" "$REMOTE"
 ```
 
-## License
+## License and provenance
 
-GPL-2.0-or-later, like Meld — whose engine this project vendors
-(`tmeld/_vendor/meld/`, from gitlab.gnome.org/GNOME/meld).
+GPL-2.0-or-later (see LICENSE), like Meld — whose engine this project
+vendors byte-for-byte apart from mechanical import rewrites
+(`tmeld/_vendor/meld/`, pinned commit recorded in
+`tmeld/_vendor/UPSTREAM`, rewrites applied by `maint/vendor.py`). The
+vendored `vc/` package is BSD 2-clause (its COPYING ships alongside).
+
+tmeld is an independent project, not affiliated with or endorsed by
+the Meld or GNOME projects. All credit for the diff engine and the
+design this port imitates goes to [Meld](https://meld.app/) and its
+maintainers.

@@ -4,12 +4,27 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tmeld"
-version = "0.0.1"
+dynamic = ["version"]
 description = "Meld, in your terminal: a faithful TUI port of the Meld diff/merge tool"
 readme = "README.md"
 license = "GPL-2.0-or-later"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = ["textual>=8,<9"]
+keywords = ["diff", "merge", "meld", "tui", "terminal", "mergetool", "git"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: POSIX",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Version Control",
+    "Topic :: Text Processing :: General",
+    "Topic :: Utilities",
+]
+
+[project.urls]
+"Upstream (Meld)" = "https://gitlab.gnome.org/GNOME/meld"
 
 [project.scripts]
 tmeld = "tmeld.app:main"
@@ -17,6 +32,14 @@ tmeld-dump = "tmeld.dump:main"
 
 [tool.setuptools.packages.find]
 include = ["tmeld*"]
+
+[tool.setuptools.package-data]
+# provenance manifest + the vc/ package's BSD license text
+"tmeld._vendor" = ["UPSTREAM"]
+"tmeld._vendor.meld.vc" = ["COPYING"]
+
+[tool.setuptools.dynamic]
+version = {attr = "tmeld.__version__"}
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

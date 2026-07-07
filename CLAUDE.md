@@ -180,6 +180,17 @@ working context that isn't in either.
   profile name; crash leaves it switched), kitty remote-control
   set-font-size (needs allow_remote_control). No universal escape.
   Decided: not now; revisit as --font-profile flag.
+- Release prep done: LICENSE = GPLv2 text (from upstream COPYING);
+  vendor.py now stamps a provenance + GPLv2-§2(a) change-notice header
+  on every vendored file and copies meld/vc/COPYING (BSD 2-clause);
+  version single-sourced from tmeld.__version__ (0.3.0, keep in sync
+  with tags); pyproject has classifiers/keywords/license-files +
+  package-data for UPSTREAM + vc/COPYING (non-.py files DON'T ship
+  without it); sdist/wheel build clean, wheel smoke-tested in a fresh
+  venv; .github/workflows/ci.yml = pytest matrix 3.10-3.13 + build.
+  Still to do to actually publish: pick repo host + push, `twine
+  upload`, README not-affiliated note is in; courtesy note to Meld
+  maintainers after publishing.
 - Still open: chunk boundary lines (underline approx), Phase 4 Tier-1
   text linkmap (braille/box approx — may be moot given Tier 2),
   dirdiff polish (F8 state/name filter toggles, compare-marked,

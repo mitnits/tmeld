@@ -12,6 +12,7 @@ root: python maint/vendor.py
 import re
 import subprocess
 import sys
+from datetime import date
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -36,6 +37,11 @@ FILES = [
     "meld/vc/svn.py",
 ]
 
+# License texts copied verbatim, no rewrites, no notice header
+LICENSE_FILES = [
+    "meld/vc/COPYING",  # the vc/ package is BSD 2-clause
+]
+
 REWRITES = [
     (re.compile(r"^(\s*)from meld\."), r"\1from tmeld._vendor.meld."),
     (re.compile(r"^(\s*)import meld\."), r"\1import tmeld._vendor.meld."),
@@ -56,21 +62,47 @@ def main() -> int:
         capture_output=True, text=True, check=True,
     ).stdout.strip()
 
+    today = date.today().isoformat()
     for rel in FILES:
         src = UPSTREAM / rel
         dst = VENDOR / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
         lines = src.read_text(encoding="utf-8").splitlines(keepends=True)
         out = []
+        changed = False
         for line in lines:
             for pattern, repl in REWRITES:
                 new = pattern.sub(repl, line)
                 if new != line:
                     line = new
+                    changed = True
                     break
             out.append(line)
-        dst.write_text("".join(out), encoding="utf-8", newline="\n")
+        # GPLv2 §2(a): modified files must carry prominent notices of
+        # the change and its date
+        notice = (
+            f"# Vendored from Meld (https://gitlab.gnome.org/GNOME/meld)"
+            f" @ {commit[:12]}.\n"
+        )
+        if changed:
+            notice += (
+                f"# Changed {today} by tmeld's maint/vendor.py:"
+                f" import paths rewritten (see that script);"
+                f" otherwise verbatim.\n"
+            )
+        else:
+            notice += f"# Copied verbatim {today} by tmeld's maint/vendor.py.\n"
+        dst.write_text(notice + "".join(out), encoding="utf-8", newline="\n")
         print(f"vendored {rel}")
+
+    for rel in LICENSE_FILES:
+        dst = VENDOR / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        dst.write_text(
+            (UPSTREAM / rel).read_text(encoding="utf-8"),
+            encoding="utf-8", newline="\n",
+        )
+        print(f"vendored {rel} (license, verbatim)")
 
     # Package inits for the vendored tree
     for init in [VENDOR / "meld" / "__init__.py"]:
@@ -80,7 +112,7 @@ def main() -> int:
     (VENDOR / "UPSTREAM").write_text(
         f"repository: https://gitlab.gnome.org/GNOME/meld.git\n"
         f"commit: {commit}\n"
-        f"files:\n" + "".join(f"  - {f}\n" for f in FILES),
+        f"files:\n" + "".join(f"  - {f}\n" for f in FILES + LICENSE_FILES),
         encoding="utf-8", newline="\n",
     )
     print(f"pinned upstream commit {commit[:12]}")
