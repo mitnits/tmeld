@@ -121,6 +121,10 @@ working context that isn't in either.
   on a file row posts OpenComparison; shell opens a FileDiffView tab.
   Widget.tree is taken by Textual — the attr is view.dirtree. 108
   tests green. Demo dirs: /tmp/tmeld-demo/project-{a,b}.
+- User verdict 2026-07-07 (round 6): tabs + folder comparison validated
+  after fixes: black-bar border leak (be70dc4), single-click folder
+  toggle, ✕ close buttons, overflow shift arrows + wheel, active-tab
+  background. v0.3.0 tag = user-validated high-water mark.
 - GOTCHA (black-bar regression, fixed be70dc4): rules that override a
   Textual widget's built-in styling (e.g. TextArea's :focus border)
   MUST live in TmeldApp.CSS — App CSS outranks all DEFAULT_CSS, but a
