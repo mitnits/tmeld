@@ -24,7 +24,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     parser.add_argument(
         "files", nargs="+",
-        help="two or three files (3-way: LOCAL MERGED REMOTE)",
+        help="two or three files (3-way: LOCAL MERGED REMOTE) or folders; "
+             "a single path opens the version-control view",
+    )
+    parser.add_argument(
+        "--diff", action="append", nargs="+", default=[], metavar="PATH",
+        help="open an extra comparison tab for 2 or 3 paths (repeatable)",
     )
     parser.add_argument(
         "-o", "--output", metavar="FILE",
@@ -53,8 +58,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    if len(args.files) not in (2, 3):
-        parser.error("expected 2 or 3 files")
+    if len(args.files) > 3:
+        parser.error("expected 1-3 paths")
+    for group in args.diff:
+        if len(group) > 3:
+            parser.error("--diff takes 1-3 paths")
     if args.output and len(args.files) != 3:
         parser.error("--output requires a 3-way comparison")
 
@@ -65,12 +73,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "bmeld needs aiohttp — install with: pip install 'tmeld[web]'"
         )
 
+    diffs = [(args.files, args.output)]
+    diffs.extend((group, None) for group in args.diff)
     try:
         session = make_session(
-            args.files, theme_name=args.theme, output=args.output,
-            grace=args.grace,
+            args.files, theme_name=args.theme, grace=args.grace,
+            diffs=diffs,
         )
-    except OSError as err:
+    except (OSError, ValueError) as err:
         parser.error(str(err))
 
     token = secrets.token_urlsafe(16)

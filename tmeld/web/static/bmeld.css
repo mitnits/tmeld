@@ -29,9 +29,84 @@ body {
 }
 #main {
   flex: 1;
-  display: grid;
+  display: flex;
   min-height: 0;
 }
+.bm-tabcontent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.bm-filegrid { flex: 1; display: grid; min-height: 0; }
+
+/* --- tab bar -------------------------------------------------------------- */
+
+#tabbar {
+  display: none;
+  gap: 2px;
+  padding: 4px 8px 0;
+  background: #ececec;
+  border-bottom: 1px solid #ddd;
+}
+.bm-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  font-size: 12px;
+  border: 1px solid #ddd;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  background: #f6f6f6;
+  color: #666;
+  cursor: pointer;
+  max-width: 280px;
+}
+.bm-tab span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bm-tab-active { background: var(--bm-page-bg); color: var(--bm-text-fg); font-weight: 600; }
+.bm-tabclose { color: #999; padding: 0 2px; }
+.bm-tabclose:hover { color: #c33; }
+
+/* --- dir / vc tree ----------------------------------------------------------- */
+
+.bm-tree {
+  flex: 1;
+  overflow: auto;
+  outline: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 4px 0;
+}
+.bm-treerow { display: flex; cursor: pointer; white-space: pre; }
+.bm-treerow:hover { background: #f4f4f4; }
+.bm-treerow.bm-selected { background: var(--bm-current-line, #ffffbf); }
+.bm-treecell {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 8px;
+  border-right: 1px solid #eee;
+}
+/* PARITY.md §2 tree states */
+.bm-st-normal   { color: var(--bm-text-fg); }
+.bm-st-nochange { color: var(--bm-text-fg); font-style: italic; }
+.bm-st-new      { color: var(--bm-insert-fg); font-weight: bold; }
+.bm-st-modified { color: var(--bm-replace-fg); font-weight: bold; }
+.bm-st-renamed  { color: var(--bm-replace-fg); }
+.bm-st-conflict { color: var(--bm-conflict-fg); font-weight: bold; }
+.bm-st-removed, .bm-st-missing {
+  color: var(--bm-delete-fg); font-weight: bold;
+  text-decoration: line-through;
+}
+.bm-st-nonexist { color: var(--bm-unknown-fg); text-decoration: line-through; }
+.bm-st-ignored, .bm-st-none, .bm-st-empty { color: var(--bm-unknown-fg); }
+.bm-st-empty { font-style: italic; }
+.bm-st-error { color: var(--bm-error-fg); font-weight: bold; }
 
 /* --- panes ------------------------------------------------------------- */
 

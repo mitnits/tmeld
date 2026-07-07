@@ -76,10 +76,16 @@ The process exits with the same mergetool contract as tmeld, so the
 
 ```
 bmeld local.py base.py remote.py   # prints http://127.0.0.1:PORT/t/TOKEN
+bmeld dirA dirB                    # folder comparison (Enter opens files)
+bmeld .                            # version-control view (commit/revert)
+bmeld a b --diff c d               # extra comparison tabs
 bmeld --port 8731 a.py b.py        # fixed port: add a LocalForward line
                                    # to ~/.ssh/config and remote links
                                    # open on your local browser
 ```
+
+File, folder, and version-control comparisons open as tabs (with ✕
+close buttons); Enter/double-click a tree row opens a file comparison.
 
 Over SSH, bmeld prints the port-forward one-liner instead of trying to
 open a browser. Sessions survive reloads; closing the tab without

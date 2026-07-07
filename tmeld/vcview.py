@@ -194,6 +194,61 @@ class VcComparison:
         )
 
 
+def run_diff_spec(vc, path: str) -> Optional[dict]:
+    """Comparison spec for a working-copy file (port of upstream
+    vcview.run_diff, gschema defaults). Shared by the TUI VcView and
+    bmeld's server; returns None for dirs/missing paths. Temps are
+    chmod 0444 and registered for exit cleanup."""
+    if not path or os.path.isdir(path):
+        return None
+    basename = os.path.basename(path)
+    state = vc.get_entry(path).state
+
+    if state == STATE_CONFLICT and hasattr(vc, "get_path_for_conflict"):
+        # gschema default vc-merge-file-order: remote-merge-local
+        conflicts = (CONFLICT_OTHER, CONFLICT_MERGED, CONFLICT_THIS)
+        diffs = [vc.get_path_for_conflict(path, conflict=c) for c in conflicts]
+        temps = [p for p, is_temp in diffs if is_temp]
+        spec = dict(
+            paths=[p for p, _is_temp in diffs],
+            output=path,
+            labels=[f"{basename} — remote", None, f"{basename} — local"],
+            readonly=(0, 2),
+            tab_title=f"{basename} (remote, merge, local)",
+        )
+    else:
+        comp_path = vc.get_path_for_repo_file(path)
+        temps = [comp_path]
+        # gschema default vc-left-is-local: false -> repo | working
+        spec = dict(
+            paths=[comp_path, path],
+            output=None,
+            labels=[f"{basename} — repository", None],
+            readonly=(0,),
+            tab_title=f"{basename} (repository, working)",
+        )
+    for temp_file in temps:
+        os.chmod(temp_file, 0o444)
+        _temp_files.append(temp_file)
+    return spec
+
+
+def run_vc_command(command, files, working_dir):
+    """(ok, detail) for a VC subprocess (shared TUI/web runner core)."""
+    try:
+        result = subprocess.run(
+            list(command) + list(files),
+            cwd=working_dir,
+            capture_output=True,
+            text=True,
+        )
+    except OSError as err:
+        return False, str(err)
+    if result.returncode != 0:
+        return False, (result.stderr or result.stdout).strip()[:400]
+    return True, (result.stdout or "").strip()[:400]
+
+
 class VcTree(DirTree):
     """DirTree plus the VC-only key surface."""
 
@@ -371,44 +426,10 @@ class VcView(ComparisonView):
     # --- Row activation (port of vcview.run_diff) -----------------------------
 
     def on_dir_tree_activated(self, message: DirTree.Activated) -> None:
-        path = message.entry.paths[0]
-        if not path or os.path.isdir(path):
+        spec = run_diff_spec(self.vc, message.entry.paths[0])
+        if spec is None:
             self.app.bell()
             return
-        basename = os.path.basename(path)
-        state = self.vc.get_entry(path).state
-
-        if state == STATE_CONFLICT and hasattr(self.vc, "get_path_for_conflict"):
-            # gschema default vc-merge-file-order: remote-merge-local
-            conflicts = (CONFLICT_OTHER, CONFLICT_MERGED, CONFLICT_THIS)
-            diffs = [
-                self.vc.get_path_for_conflict(path, conflict=c)
-                for c in conflicts
-            ]
-            temps = [p for p, is_temp in diffs if is_temp]
-            paths = [p for p, _is_temp in diffs]
-            labels = (f"{basename} — remote", None, f"{basename} — local")
-            spec = dict(
-                paths=paths,
-                output=path,
-                labels=labels,
-                readonly=(0, 2),
-                tab_title=f"{basename} (remote, merge, local)",
-            )
-        else:
-            comp_path = self.vc.get_path_for_repo_file(path)
-            temps = [comp_path]
-            # gschema default vc-left-is-local: false -> repo | working
-            spec = dict(
-                paths=[comp_path, path],
-                labels=(f"{basename} — repository", None),
-                readonly=(0,),
-                tab_title=f"{basename} (repository, working)",
-            )
-
-        for temp_file in temps:
-            os.chmod(temp_file, 0o444)
-            _temp_files.append(temp_file)
         self.post_message(self.OpenComparison(**spec))
 
     # --- VC commands (port of vcview.runner/_command_iter, sync) --------------
@@ -416,25 +437,14 @@ class VcView(ComparisonView):
     def _run_command(
         self, command: List[str], files: List[str], working_dir: str
     ) -> bool:
-        try:
-            result = subprocess.run(
-                command + files,
-                cwd=working_dir,
-                capture_output=True,
-                text=True,
-            )
-        except OSError as err:
-            self.notify(str(err), severity="error")
-            return False
-        if result.returncode != 0:
-            detail = (result.stderr or result.stdout).strip()
+        ok, detail = run_vc_command(command, files, working_dir)
+        if not ok:
             self.notify(
                 f"{' '.join(command)} failed: {detail}"[:200],
                 severity="error",
                 timeout=6,
             )
-            return False
-        return True
+        return ok
 
     def _runner(self, command, files, refresh, working_dir) -> None:
         if self._run_command(list(command), list(files), working_dir):

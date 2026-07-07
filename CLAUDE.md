@@ -241,9 +241,27 @@ working context that isn't in either.
   GOTCHA: merge-all AFTER manually resolving a conflict re-pulls the
   other side (middle==one side looks like an unmerged change) — same
   as Meld/tmeld; workflow is merge-all first. 145 tests green.
-- Still open (bmeld): tabs/--diff, folder + VC views, tier-2/3
-  transports (relay), Playwright job in CI, favicon, dark theme
-  toggle (palette plumbing exists).
+- bmeld B4 done (2026-07-07): tabs + folder + VC in the browser.
+  BmeldSession holds a dict of tabs (Comparison | DirComparison |
+  VcComparison); make_comparison mirrors the TUI make_view (1 path =
+  VC). Protocol grew tab ids on every scoped msg + tab_added/tree/
+  vc_result; dir/VC scans run in run_in_executor. VC diff/commit/
+  revert reuse tmeld/vcview.py's extracted run_diff_spec + run_vc_command
+  (TUI VcView refactored onto them — 7 vc tests still green). Client
+  main.js refactored to FileTab/DirTab/VcTab classes + TabBar (✕,
+  active highlight, auto-hide at 1); keymap routes to the active file
+  tab; readonly panes via EditorState.readOnly; tab-aware hint bar.
+  GOTCHA (fixed): wrapping panes in .bm-tabcontent needs min-height:0
+  +overflow:hidden or the CM editor overflows the footer (Playwright
+  caught it via #done click interception). Validated headless: dir
+  tree states/colors, dblclick->file tab, arrow push+save, tab switch/
+  close, VC modified+status, repo-vs-working readonly diff, Commit
+  button->git log, --diff startup tabs; both gauntlets + 149 tests
+  green. --diff/1-3 path CLI + single-path VC.
+- Still open (bmeld): conflict 3-way FROM the VC view (spec ready,
+  untested in browser), tier-3 relay transport, Playwright job in CI,
+  favicon, dark theme toggle (palette plumbing exists), folder copy/
+  delete row actions in browser.
 - Still open: chunk boundary lines (underline approx), Phase 4 Tier-1
   text linkmap (braille/box approx — may be moot given Tier 2),
   dirdiff polish (F8 state/name filter toggles, compare-marked,

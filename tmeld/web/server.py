@@ -1,21 +1,38 @@
-"""bmeld server: one aiohttp app serving the UI and one WS session.
+"""bmeld server: one aiohttp app; a session holding comparison tabs.
+
+Tabs mirror the TUI shell: file tabs (2/3-way Comparison) and dir tabs
+(DirComparison); Enter on a tree row asks the server to open a file
+tab (`open_file`). Directory scans run in a thread executor so the
+event loop stays responsive.
 
 Security: binds 127.0.0.1 only; every route is gated by an
 unguessable token; CSP restricts the page to same-origin; the process
-can only read/write the files given on its command line.
+only touches the paths given on its command line (plus files under
+the compared directories, which is the point of a dir comparison).
 """
 
 import asyncio
+import itertools
 import json
 import logging
+import os
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Dict, List, Optional, Sequence, Union
 
 from aiohttp import WSMsgType, web
 
 from tmeld.comparison import Comparison
+from tmeld.dircompare import DirComparison
 from tmeld.palette import THEMES, Theme
-from tmeld.web.protocol import chunks_payload, init_payload
+from tmeld.vcview import VcComparison, run_diff_spec, run_vc_command
+from tmeld.web.protocol import (
+    chunks_payload,
+    dir_tab_payload,
+    file_tab_payload,
+    palette_payload,
+    tree_payload,
+    vc_tab_payload,
+)
 
 log = logging.getLogger("bmeld")
 
@@ -26,21 +43,52 @@ CSP = (
     "style-src 'self' 'unsafe-inline'"
 )
 
+TabComparison = Union[Comparison, DirComparison, VcComparison]
+
+
+def make_comparison(
+    paths: Sequence[str], output: Optional[str] = None
+) -> TabComparison:
+    """Files -> Comparison, all-dirs -> DirComparison, a single path ->
+    VC view (Meld-style auto-detection, like the TUI's make_view)."""
+    if len(paths) == 1:
+        if output:
+            raise ValueError("--output requires a file comparison")
+        return VcComparison(paths[0])
+    dir_flags = [os.path.isdir(p) for p in paths]
+    if all(dir_flags):
+        if output:
+            raise ValueError("--output requires a file comparison")
+        return DirComparison(paths)
+    if any(dir_flags):
+        raise ValueError("cannot mix files and folders in one comparison")
+    return Comparison(paths, output=output)
+
 
 class BmeldSession:
-    """One comparison being resolved in the browser."""
+    """One bmeld process: comparison tabs resolved in the browser."""
 
     def __init__(
         self,
-        paths: Sequence[str],
+        specs: Sequence,  # [(paths, output), ...]
         theme: Theme,
-        output: Optional[str] = None,
         grace: float = 60.0,
     ) -> None:
-        self.comparison = Comparison(paths, output=output)
+        self._ids = itertools.count(0)
+        self.tabs: Dict[str, TabComparison] = {}
+        self.tab_order: List[str] = []
+        for paths, output in specs:
+            tab_id = f"tab{next(self._ids)}"
+            self.tabs[tab_id] = make_comparison(paths, output=output)
+            self.tab_order.append(tab_id)
         self.theme = theme
         self.grace = grace
-        self.merged_saved = False
+        # every 3-way file tab ever opened must be saved for exit 0
+        # (closing an unsaved merge tab still fails, like the TUI shell)
+        self.merge_saved: Dict[str, bool] = {}
+        for tab_id, comparison in self.tabs.items():
+            if isinstance(comparison, Comparison) and comparison.num_panes == 3:
+                self.merge_saved[tab_id] = False
         self.closed = asyncio.Event()
         self._connections = 0
         self._grace_task: Optional[asyncio.Task] = None
@@ -48,9 +96,7 @@ class BmeldSession:
     # --- lifecycle ---------------------------------------------------------
 
     def exit_status(self) -> int:
-        if self.comparison.num_panes == 3:
-            return 0 if self.merged_saved else 1
-        return 0
+        return 0 if all(self.merge_saved.values()) else 1
 
     def _client_connected(self) -> None:
         self._connections += 1
@@ -74,19 +120,67 @@ class BmeldSession:
                  self.grace)
         self.closed.set()
 
+    # --- payload helpers -----------------------------------------------------
+
+    def _tab_payload(self, tab_id: str) -> dict:
+        comparison = self.tabs[tab_id]
+        if isinstance(comparison, VcComparison):
+            return vc_tab_payload(tab_id, comparison)
+        if isinstance(comparison, DirComparison):
+            return dir_tab_payload(tab_id, comparison)
+        return file_tab_payload(tab_id, comparison)
+
+    async def _initial_messages(self):
+        yield {
+            "type": "init",
+            "tabs": [self._tab_payload(t) for t in self.tab_order],
+            "palette": palette_payload(self.theme),
+        }
+        for tab_id in list(self.tab_order):
+            comparison = self.tabs[tab_id]
+            if isinstance(comparison, (DirComparison, VcComparison)):
+                yield await self._scan(tab_id, comparison)
+            else:
+                yield chunks_payload(tab_id, comparison)
+
+    async def _scan(self, tab_id: str, comparison) -> dict:
+        loop = asyncio.get_event_loop()
+
+        def scan():
+            if isinstance(comparison, VcComparison):
+                for _progress in comparison.scan_iter():
+                    pass
+            else:
+                comparison.scan()
+
+        await loop.run_in_executor(None, scan)
+        return tree_payload(tab_id, comparison)
+
+    def _add_file_tab(self, comparison: Comparison, **payload_kwargs) -> dict:
+        tab_id = f"tab{next(self._ids)}"
+        self.tabs[tab_id] = comparison
+        self.tab_order.append(tab_id)
+        if comparison.num_panes == 3:
+            self.merge_saved[tab_id] = False
+        return {
+            "type": "tab_added",
+            "tab": file_tab_payload(tab_id, comparison, **payload_kwargs),
+            "chunks": chunks_payload(tab_id, comparison),
+        }
+
     # --- message handling ----------------------------------------------------
 
     async def handle_ws(self, ws: web.WebSocketResponse) -> None:
         self._client_connected()
         try:
-            await ws.send_json(init_payload(self.comparison, self.theme))
-            await ws.send_json(chunks_payload(self.comparison))
+            async for payload in self._initial_messages():
+                await ws.send_json(payload)
             async for msg in ws:
                 if msg.type != WSMsgType.TEXT:
                     continue
                 try:
                     data = json.loads(msg.data)
-                    reply = self._dispatch(data)
+                    reply = await self._dispatch(data)
                 except Exception as err:  # noqa: BLE001 - report to client
                     log.exception("bad message")
                     reply = {"type": "error", "message": str(err)}
@@ -97,15 +191,93 @@ class BmeldSession:
         finally:
             self._client_disconnected()
 
-    def _dispatch(self, data: dict) -> Optional[dict]:
+    async def _dispatch(self, data: dict) -> Optional[dict]:
         kind = data.get("type")
-        comparison = self.comparison
+        if kind == "close":
+            self.closed.set()
+            return None
+        if kind == "open_file":
+            paths = [str(p) for p in data["paths"]]
+            if not (2 <= len(paths) <= 3):
+                raise ValueError("open_file takes 2 or 3 paths")
+            return self._add_file_tab(Comparison(paths))
+
+        tab_id = data["tab"]
+        comparison = self.tabs.get(tab_id)
+        if comparison is None:
+            raise ValueError(f"unknown tab: {tab_id!r}")
+
+        if kind == "close_tab":
+            del self.tabs[tab_id]
+            self.tab_order.remove(tab_id)
+            # merge_saved entry stays: closed-unsaved still fails
+            return None
+        if kind == "scan" and isinstance(
+            comparison, (DirComparison, VcComparison)
+        ):
+            return await self._scan(tab_id, comparison)
+
+        if isinstance(comparison, VcComparison):
+            loop = asyncio.get_event_loop()
+            vc = comparison.vc
+            if kind == "vc_diff":
+                path = str(data["path"])
+                spec = await loop.run_in_executor(
+                    None, run_diff_spec, vc, path)
+                if spec is None:
+                    raise ValueError(f"nothing to compare for {path!r}")
+                return self._add_file_tab(
+                    Comparison(spec["paths"], output=spec["output"]),
+                    labels=spec["labels"],
+                    readonly=spec["readonly"],
+                    tab_title=spec["tab_title"],
+                )
+            if kind == "vc_commit":
+                message = str(data.get("message", "")).strip()
+                if not message:
+                    raise ValueError("empty commit message")
+
+                def commit():
+                    files = vc.get_files_to_commit([comparison.location])
+                    if not files:
+                        return False, "nothing to commit"
+                    result = {}
+
+                    def runner(command, cfiles, refresh, working_dir):
+                        ok, detail = run_vc_command(
+                            command, cfiles, working_dir)
+                        result["ok"], result["detail"] = ok, detail
+
+                    vc.commit(runner, files, message)
+                    return result.get("ok", False), result.get("detail", "")
+
+                ok, detail = await loop.run_in_executor(None, commit)
+                return {"type": "vc_result", "tab": tab_id,
+                        "ok": ok, "detail": detail or "committed"}
+            if kind == "vc_revert":
+                path = str(data["path"])
+
+                def revert():
+                    result = {}
+
+                    def runner(command, cfiles, refresh, working_dir):
+                        ok, detail = run_vc_command(
+                            command, cfiles, working_dir)
+                        result["ok"], result["detail"] = ok, detail
+
+                    vc.revert(runner, [path])
+                    return result.get("ok", False), result.get("detail", "")
+
+                ok, detail = await loop.run_in_executor(None, revert)
+                return {"type": "vc_result", "tab": tab_id,
+                        "ok": ok, "detail": detail or "reverted"}
+
+        if not isinstance(comparison, Comparison):
+            raise ValueError(f"{kind!r} needs a file tab")
         if kind == "buffers":
-            comparison.lines = [
-                text.split("\n") for text in data["texts"]
-            ]
+            comparison.lines = [t.split("\n") for t in data["texts"]]
             comparison.recompute()
-            payload = chunks_payload(comparison)
+            payload = chunks_payload(tab_id, comparison)
             payload["version"] = data.get("version", 0)
             return payload
         if kind == "save":
@@ -113,20 +285,15 @@ class BmeldSession:
             comparison.lines[pane] = data["text"].split("\n")
             comparison.save(pane)
             if pane == 1 and comparison.num_panes == 3:
-                self.merged_saved = True
-            return {"type": "saved", "pane": pane,
+                self.merge_saved[tab_id] = True
+            return {"type": "saved", "tab": tab_id, "pane": pane,
                     "path": comparison.save_paths[pane]}
         if kind == "merge_all":
             # engine-side (vendored Merger) so merge semantics stay Meld's
-            comparison.lines = [
-                text.split("\n") for text in data["texts"]
-            ]
+            comparison.lines = [t.split("\n") for t in data["texts"]]
             comparison.recompute()
             merged = comparison.merge_all_non_conflicting()
-            return {"type": "merged", "text": merged}
-        if kind == "close":
-            self.closed.set()
-            return None
+            return {"type": "merged", "tab": tab_id, "text": merged}
         raise ValueError(f"unknown message type: {kind!r}")
 
 
@@ -192,7 +359,7 @@ def make_session(
     theme_name: str = "meld-base",
     output: Optional[str] = None,
     grace: float = 60.0,
+    diffs: Optional[Sequence] = None,
 ) -> BmeldSession:
-    return BmeldSession(
-        paths, THEMES[theme_name], output=output, grace=grace
-    )
+    specs = list(diffs) if diffs is not None else [(list(paths), output)]
+    return BmeldSession(specs, THEMES[theme_name], grace=grace)
