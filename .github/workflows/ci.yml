@@ -69,7 +69,11 @@ jobs:
           /usr/bin/tmeld --version
           printf 'a\n' > /tmp/a; printf 'b\n' > /tmp/b
           /usr/bin/tmeld-dump /tmp/a /tmp/b | grep -q replace
+      - name: Collect artifact
+        # dpkg-buildpackage writes to the parent dir; upload-artifact
+        # refuses '..' paths
+        run: mkdir -p debian-dist && cp ../tmeld_*_all.deb debian-dist/
       - uses: actions/upload-artifact@v4
         with:
           name: deb
-          path: ../tmeld_*_all.deb
+          path: debian-dist/
