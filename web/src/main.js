@@ -299,26 +299,28 @@ class FileTab {
     const W = rect.width;
     const H = rect.height;
     if (!W || !H) return;
-    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    // No viewBox: user units are CSS pixels of the gutter box, 1:1, with no
+    // scale and no translate. A viewBox whose height lags the element's (the
+    // gutter resizes without a re-render) would otherwise be centered by the
+    // default preserveAspectRatio and silently shift every connector by half
+    // the difference.
     while (svg.firstChild) svg.removeChild(svg.firstChild);
     el.querySelectorAll(".bm-arrow").forEach((a) => a.remove());
 
     this.pairs[k].forEach((chunk, index) => {
       const [tag, sa, ea, sb, eb] = chunk;
-      const f0 = this.lineScreenY(va, sa) - rect.top;
-      const f1 = ea > sa ? this.lineScreenY(va, ea) - rect.top - 1 : f0;
-      const t0 = this.lineScreenY(vb, sb) - rect.top;
-      const t1 = eb > sb ? this.lineScreenY(vb, eb) - rect.top - 1 : t0;
+      const [f0, f1] = this.chunkEdges(va, sa, ea, rect.top);
+      const [t0, t1] = this.chunkEdges(vb, sb, eb, rect.top);
       if (Math.max(f1, t1) < 0 || Math.min(f0, t0) > H) return;
 
       const emphasis = this.emph[k] === index;
       const path = document.createElementNS(svgNS, "path");
       const m = W / 2;
       path.setAttribute("d",
-        `M -0.5 ${f0 - 0.5}` +
-        ` C ${m} ${f0 - 0.5} ${m} ${t0 - 0.5} ${W + 0.5} ${t0 - 0.5}` +
-        ` L ${W + 0.5} ${t1 + 0.5}` +
-        ` C ${m} ${t1 + 0.5} ${m} ${f1 + 0.5} -0.5 ${f1 + 0.5} Z`);
+        `M -0.5 ${f0}` +
+        ` C ${m} ${f0} ${m} ${t0} ${W + 0.5} ${t0}` +
+        ` L ${W + 0.5} ${t1}` +
+        ` C ${m} ${t1} ${m} ${f1} -0.5 ${f1} Z`);
       path.setAttribute("fill",
         `var(--bm-${tag}-${emphasis ? "emph" : "fill"})`);
       path.setAttribute("stroke", `var(--bm-${tag}-line)`);
@@ -334,6 +336,34 @@ class FileTab {
           this.pushPair(k, false, index)));
       }
     });
+  }
+
+  // Line tops land on fractional pixels (line-height 1.45 of 13px). The
+  // browser snaps CSS backgrounds and box-shadows to the device-pixel grid
+  // but antialiases SVG, so a connector drawn at the raw coordinate is a
+  // fraction of a pixel off the fill it attaches to. Snap to the same grid.
+  snapY(pageY) {
+    const dpr = window.devicePixelRatio || 1;
+    return Math.round(pageY * dpr) / dpr;
+  }
+
+  // Stroke centerlines for a chunk's top and bottom edges, in gutter
+  // coordinates. Upstream's cairo nudges (f0 - 0.5, f1 - 1 + 0.5) center a
+  // 1px line *straddling* the line boundary; our pane boundaries are CSS
+  // `box-shadow: inset`, painted just *inside* the fill. So inset the
+  // centerlines by half a pixel instead, and the connector's stroke lands on
+  // exactly the rows the box-shadow does. A zero-height chunk (a pure
+  // insertion on the other side) has no fill to align with: keep it a 1px
+  // band straddling the boundary it points at.
+  chunkEdges(view, start, end, offset) {
+    const top = this.snapY(this.lineScreenY(view, start)) - offset;
+    if (end <= start) return [top - 0.5, top + 0.5];
+    const bottom = this.snapY(this.lineScreenY(view, end)) - offset;
+    if (bottom - top < 1) {
+      const mid = (top + bottom) / 2;
+      return [mid - 0.5, mid + 0.5];
+    }
+    return [top + 0.5, bottom - 0.5];
   }
 
   makeArrow(glyph, tag, x, y, onclick) {
@@ -355,7 +385,6 @@ class FileTab {
     const W = el.clientWidth;
     if (!W || !H) return;
     const total = Math.max(this.totalLines(mid), 1);
-    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     while (svg.firstChild) svg.removeChild(svg.firstChild);
     for (const [tag, s, e] of this.panes[mid].chunks) {
       const r = document.createElementNS(svgNS, "rect");

@@ -258,6 +258,34 @@ working context that isn't in either.
   close, VC modified+status, repo-vs-working readonly diff, Commit
   button->git log, --diff startup tabs; both gauntlets + 149 tests
   green. --diff/1-3 path CLI + single-path VC.
+- bmeld B5 (2026-07-08, user caught a 1px connector misalignment):
+  three bugs, all in the client's geometry/layout, all browser-only.
+  (1) GOTCHA: the gutter/chunkmap SVGs carried viewBox="0 0 W H" from a
+  stale render; when the element grew (470->475) the default
+  preserveAspectRatio="xMidYMid meet" CENTERED the drawing, shifting
+  every connector down by half the difference (getScreenCTM f=2.5).
+  Fixed by dropping viewBox entirely — coords are already CSS px of the
+  element's own box, so user units must map 1:1.
+  (2) upstream's cairo nudges (f0-0.5, f1-1 then +0.5) center a 1px
+  stroke STRADDLING the line boundary; our pane boundary lines are CSS
+  box-shadow *inset*, painted inside the fill. Ported verbatim = half a
+  pixel off. Now FileTab.chunkEdges() insets the stroke centerlines
+  (top+0.5, bottom-0.5) and snapY()s endpoints to the device-pixel grid
+  (line-height 1.45*13px lands on fractional y; the browser snaps CSS
+  backgrounds but antialiases SVG). Degenerate chunk (pure insert on
+  the other side) keeps the 1px straddling band — no fill to align to.
+  (3) BIG one, latent since B0: .bm-filegrid's implicit row was `auto`,
+  which sizes to the panes' max-content (the whole document), so files
+  taller than the window overflowed and were CLIPPED by
+  .bm-tabcontent{overflow:hidden} instead of scrolling — cm-scroller
+  never scrolled. Every test used tiny files. Fixed with
+  grid-template-rows: minmax(0,1fr) + .bm-pane{min-height:0}.
+  Also: .bm-chunkmap was styled as `#chunkmap` (dead selector since the
+  B4 tab refactor renamed it to a class). tests/test_bmeld_static.py
+  guards all four statically (dead #id/.bm-* selectors, no viewBox,
+  pinned grid row, snapped+inset edges) — verified to fail pre-fix.
+  154 tests green. Connector now butts the fill pixel-exactly (verified
+  by sampling the junction column, scrolled and unscrolled).
 - Still open (bmeld): conflict 3-way FROM the VC view (spec ready,
   untested in browser), tier-3 relay transport, Playwright job in CI,
   favicon, dark theme toggle (palette plumbing exists), folder copy/
