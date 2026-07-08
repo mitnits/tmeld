@@ -372,9 +372,11 @@ def test_tab_colours_follow_the_palette(pair):
             assert inactive[0].styles.background == Color.parse(theme.tab_inactive_bg)
             # ...and the two are actually distinguishable
             assert active[0].styles.background != inactive[0].styles.background
-            # the strip behind them is the gutter's grey
+            # the strip behind them is pushed away from the page, not the
+            # gutter's grey (which sat 1.14:1 from the active tab)
             strip = app.query_one("ContentTabs")
-            assert strip.styles.background == Color.parse(theme.gutter_bg)
+            assert strip.styles.background == Color.parse(theme.tab_bar_bg)
+            assert theme.tab_bar_bg != theme.gutter_bg
 
     for name in ("meld-base", "meld-dark"):
         run(scenario(name))
@@ -415,7 +417,7 @@ def test_tab_caps_are_the_tab_colour_on_the_bar(pair):
         async with app.run_test(size=(80, 8)) as pilot:
             await pilot.pause()
             theme = app.theme_def
-            bar = theme.gutter_bg
+            bar = theme.tab_bar_bg
             page = theme.page_bg
             dull = theme.tab_inactive_bg
 
@@ -446,3 +448,44 @@ def test_caps_cost_no_width():
     css = TmeldApp.CSS
     tab_rule = css[css.index("    Tab {"):css.index("    Tab:hover")]
     assert "padding: 0;" in tab_rule, tab_rule
+
+
+def test_tab_ladder_meets_wcag_non_text_contrast():
+    """The three surfaces must be tellable apart, in both themes.
+
+    WCAG 1.4.11 asks 3:1 for non-text UI. The old ladder (gutter grey behind
+    near-white tabs) gave 1.14:1, so two inactive tabs looked identical.
+    """
+    from tmeld.palette import THEMES
+
+    for name, theme in THEMES.items():
+        bar, inactive = theme.tab_bar_bg, theme.tab_inactive_bg
+        active = theme.page_bg
+        pairs = {
+            "active/bar": theme.contrast(active, bar),
+            "inactive/bar": theme.contrast(inactive, bar),   # separates the caps
+            "active/inactive": theme.contrast(active, inactive),
+        }
+        for label, ratio in pairs.items():
+            assert ratio >= 3.0, f"{name} {label} = {ratio:.2f}:1"
+
+
+def test_tab_text_is_legible_on_every_surface():
+    """The scheme's own fg is 1.23:1 on solarized's mid-grey inactive tab."""
+    from tmeld.palette import THEMES
+
+    for name, theme in THEMES.items():
+        for surface in (theme.page_bg, theme.tab_inactive_bg, theme.tab_bar_bg):
+            fg = theme.readable_on(surface)
+            ratio = theme.contrast(fg, surface)
+            assert ratio >= 4.5, f"{name}: {fg} on {surface} = {ratio:.2f}:1"
+
+
+def test_dark_theme_bar_goes_light():
+    """A near-black page has no headroom below it: the bar must lift instead."""
+    from tmeld.palette import THEMES
+
+    light, dark = THEMES["meld-base"], THEMES["meld-dark"]
+    lum = light._relative_luminance
+    assert lum(light.tab_bar_bg) < lum(light.page_bg), "light theme: bar darker"
+    assert lum(dark.tab_bar_bg) > lum(dark.page_bg), "dark theme: bar lighter"

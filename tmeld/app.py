@@ -86,14 +86,16 @@ class TmeldApp(App):
     TabbedContent.single Tabs {
         display: none;
     }
-    /* Tab strip: the bar is the gutter's grey, the active tab is the pane's
-       page background (so it reads as the sheet you are looking at), and an
-       inactive tab sits one step further from the page. Meld's own notebook
-       does the same. The active tab's colour is unmistakable, so Textual's
-       Underline is dropped -- which also buys back a terminal row. */
+    /* Tab strip. The active tab is the pane's page background, so it reads as
+       the sheet you are looking at; an inactive tab is halfway to the bar; and
+       the bar is pushed hard away from the page so both stand out and adjacent
+       inactive tabs are separated by their caps. Every pair clears WCAG's 3:1
+       for non-text UI -- the gutter's grey gave 1.14:1 and was unusable.
+       Text is chosen per surface; the active tab's colour is unmistakable, so
+       Textual's Underline is dropped, buying back a terminal row. */
     Tabs, ContentTabs {
         height: 1;
-        background: $tmeld-gutter;
+        background: $tmeld-tabbar;
     }
     Tabs Underline, ContentTabs Underline {
         display: none;
@@ -102,15 +104,16 @@ class TmeldApp(App):
         /* the slanted caps occupy the cells Tab reserves for padding */
         padding: 0;
         background: $tmeld-tab-inactive;
-        color: $tmeld-dim;
+        color: $tmeld-tab-inactive-fg;
     }
     Tab:hover {
-        background: $tmeld-gutter;
-        color: $tmeld-text;
+        background: $tmeld-tab-inactive;
+        color: $tmeld-tab-inactive-fg;
+        text-style: underline;
     }
     Tab.-active {
         background: $tmeld-page;
-        color: $tmeld-text;
+        color: $tmeld-tab-active-fg;
         text-style: bold;
     }
     Tab.-active:hover {
@@ -122,8 +125,8 @@ class TmeldApp(App):
         width: 4;
         height: 1;
         content-align: right middle;
-        background: $tmeld-gutter;
-        color: $tmeld-dim;
+        background: $tmeld-tabbar;
+        color: $tmeld-tabbar-fg;
         display: none;
     }
     DiffPane {
@@ -253,7 +256,7 @@ class TmeldApp(App):
         too). Textual parses the @click action from the markup."""
         tab_id = self._tab_ids[view]
         theme = self.theme_def
-        bar = theme.gutter_bg
+        bar = theme.tab_bar_bg
         tab = (
             (theme.page_bg or ("#000000" if theme.dark else "#ffffff"))
             if self._tab_is_active(tab_id) else theme.tab_inactive_bg
@@ -282,10 +285,17 @@ class TmeldApp(App):
         """Expose the Meld palette to App.CSS as $tmeld-* variables."""
         variables = super().get_css_variables()
         theme = self.theme_def
+        page = theme.page_bg or ("#000000" if theme.dark else "#ffffff")
         variables.update({
-            "tmeld-page": theme.page_bg or ("#000000" if theme.dark else "#ffffff"),
+            "tmeld-page": page,
             "tmeld-gutter": theme.gutter_bg,
+            "tmeld-tabbar": theme.tab_bar_bg,
             "tmeld-tab-inactive": theme.tab_inactive_bg,
+            # text has to be picked per surface: the scheme's own colour is
+            # unreadable on a mid-grey tab
+            "tmeld-tab-active-fg": theme.readable_on(page),
+            "tmeld-tab-inactive-fg": theme.readable_on(theme.tab_inactive_bg),
+            "tmeld-tabbar-fg": theme.readable_on(theme.tab_bar_bg),
             "tmeld-text": theme.text_fg,
             "tmeld-dim": theme.dimmed_fg,
         })

@@ -426,7 +426,19 @@ working context that isn't in either.
   matching bmeld. Scrollbars themed off theme.gutter_bg/unknown_fg (were black).
   Fixed while there: the text gutter drew push arrows on row 0, which lines up
   with the panes' title border and maps to the line ABOVE the viewport.
-- Tab strip polish (user, round 11): bar = theme.gutter_bg, ACTIVE tab =
+- Tab CONTRAST fix (user, round 18): round 11's "bar = gutter_bg" was a bad
+  call — measured 1.14:1 active-vs-bar and 1.19:1 inactive-vs-bar, so two
+  inactive tabs were indistinguishable (WCAG 1.4.11 wants 3:1 for non-text UI).
+  New: Theme.tab_bar_bg = blend(page_bg, far, 0.87) where far = black on a light
+  scheme and WHITE on a dark one — meld-dark's page (#002b36) is already
+  near-black and has NO headroom below it, so its bar has to lift. Inactive =
+  blend(tab_bar_bg, page_bg, 0.51). Alphas were SOLVED for (search for the
+  gentlest bar clearing 3:1 in both themes), not eyeballed. Text is chosen per
+  surface via Theme.readable_on(): solarized's #839496 is 1.23:1 on the mid-grey
+  inactive tab. Ladder: meld-base 16.1/5.2/3.1, meld-dark 11.6/3.0/3.9.
+  Theme.contrast() is WCAG; tests assert every pair >= 3:1 and every text >= 4.5:1.
+  The DITCH keeps gutter_bg — only the tab bar moved. Caps now sit on tab_bar_bg.
+- Tab strip polish (user, round 11, SUPERSEDED above): bar = theme.gutter_bg, ACTIVE tab =
   theme.page_bg (reads as the sheet you're looking at), INACTIVE =
   theme.tab_inactive_bg = blend(gutter_bg, text_fg, 0.08) — expressed as a
   blend toward the text colour, not "darker", so it darkens on meld-base and

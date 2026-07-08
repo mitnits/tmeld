@@ -75,14 +75,52 @@ class Theme:
         return fill
 
     @property
-    def tab_inactive_bg(self) -> str:
-        """One more step away from the page than the gutter is.
+    def tab_bar_bg(self) -> str:
+        """The strip behind the tabs, pushed hard away from the page.
 
-        Expressed as a blend toward the text colour rather than "darker", so it
-        works both ways: on a light scheme it darkens, on a dark one it lifts.
-        Either way the active tab (page_bg) stays the odd one out.
+        Not the gutter's grey: that sat 1.14:1 from the active tab, so two
+        inactive tabs were indistinguishable. The bar goes toward whichever end
+        has headroom -- black on a light scheme, white on a dark one, since a
+        dark theme's page is already near-black and cannot go darker.
         """
-        return blend(self.gutter_bg, self.text_fg, 0.08)
+        far = "#ffffff" if self.dark else "#000000"
+        base = self.page_bg or ("#000000" if self.dark else "#ffffff")
+        return blend(base, far, 0.87)
+
+    @property
+    def tab_inactive_bg(self) -> str:
+        """Halfway between the bar and the page: distinct from both."""
+        base = self.page_bg or ("#000000" if self.dark else "#ffffff")
+        return blend(self.tab_bar_bg, base, 0.51)
+
+    @staticmethod
+    def _relative_luminance(color: str) -> float:
+        parts = [int(color.lstrip("#")[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+        parts = [
+            c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+            for c in parts
+        ]
+        return 0.2126 * parts[0] + 0.7152 * parts[1] + 0.0722 * parts[2]
+
+    @classmethod
+    def contrast(cls, a: str, b: str) -> float:
+        """WCAG contrast ratio, 1.0 (identical) to 21.0 (black on white)."""
+        high, low = sorted(
+            (cls._relative_luminance(a), cls._relative_luminance(b)),
+            reverse=True,
+        )
+        return (high + 0.05) / (low + 0.05)
+
+    def readable_on(self, background: str) -> str:
+        """Black or white, whichever the eye can actually read there.
+
+        The scheme's own text colour is fine on the page but can vanish on a
+        mid-grey tab (solarized's #839496 on #6d858c is 1.23:1).
+        """
+        if self.contrast(self.text_fg, background) >= 4.5:
+            return self.text_fg
+        black, white = "#000000", "#ffffff"
+        return black if self.contrast(black, background) >= self.contrast(white, background) else white
 
     def chunk_fg(self, tag: str) -> str:
         """Foreground for a gutter icon sitting on this chunk's fill.
