@@ -16,14 +16,22 @@ cd "$(dirname "$0")/.."
 
 # The stamp goes into debian/changelog, which is tracked. Put it back
 # afterwards, or the next build sees a dirty tree and stamps ".dirty".
-trap 'git checkout -- debian/changelog 2>/dev/null || true' EXIT INT TERM
+restore() { [ -n "${in_git:-}" ] && git checkout -- debian/changelog 2>/dev/null || true; }
+trap restore EXIT INT TERM
 
 # read __version__ the same way the package does, not the first quoted string
 base=$(python3 -c 'import re; print(re.search(r"^__version__\s*=\s*[\"\x27]([^\"\x27]+)", open("tmeld/__init__.py").read(), re.M).group(1))')
-stamp=$(git log -1 --format=%cd --date=format:%Y%m%d)
-sha=$(git rev-parse --short=7 HEAD)
-git diff --quiet && dirty= || dirty=".dirty"
-version="${base}+${stamp}.${sha}${dirty}"
+# Stamp from git when we have it; a source tarball has no history, so fall
+# back to today's date. Either way the version rises with each build.
+if git rev-parse --git-dir >/dev/null 2>&1; then
+    in_git=1
+    stamp=$(git log -1 --format=%cd --date=format:%Y%m%d)
+    sha=$(git rev-parse --short=7 HEAD)
+    git diff --quiet && dirty= || dirty=".dirty"
+    version="${base}+${stamp}.${sha}${dirty}"
+else
+    version="${base}+$(date -u +%Y%m%d%H%M)"
+fi
 
 echo "==> building tmeld ${version}"
 python3 - "$version" <<'PY'

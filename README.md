@@ -30,17 +30,30 @@ them back (in `bmeld` too).
 From PyPI: `pipx install tmeld` (or `pip install tmeld`).
 
 As a Debian package: grab `tmeld_*_all.deb` from the GitHub release, or
-build one yourself with `maint/mkdeb.sh` (needs network: the build bundles
-the pinned Textual under `/usr/share/tmeld/lib`, since tmeld needs a newer
-Textual than Debian ships; system Python packages are untouched). Install
-with `sudo apt install ./tmeld_*_all.deb` so the recommended
-`python3-aiohttp` comes along — that is what `bmeld` needs, and it is *not*
-bundled, because its C extensions would make the package
-architecture-dependent instead of `all`.
+build one yourself:
 
-`maint/mkdeb.sh` stamps each build `<version>+<date>.<sha>`, so rebuilding
-and `dpkg -i`-ing on another machine upgrades in place rather than being
-refused as the same version.
+```sh
+sudo apt install build-essential debhelper dpkg-dev \
+                 python3 python3-pip python3-venv git
+git clone https://github.com/mitnits/tmeld.git
+cd tmeld && maint/mkdeb.sh          # writes ../tmeld_<ver>+<date>.<sha>_all.deb
+sudo apt install ../tmeld_*_all.deb  # apt, so Recommends come too
+```
+
+Building needs network: it fetches the pinned Textual from PyPI and bundles
+it under `/usr/share/tmeld/lib`, because tmeld needs a newer Textual than
+Debian ships. System Python packages are untouched. The result is
+`Architecture: all`, so one build serves every machine — copy the `.deb`
+around and `apt install ./…` it.
+
+Use `apt install ./file.deb` rather than `dpkg -i`, so the recommended
+`python3-aiohttp` is pulled in. That is what `bmeld` needs, and it is
+deliberately *not* bundled: its C extensions would make the package
+architecture-dependent.
+
+`maint/mkdeb.sh` stamps each build `<version>+<date>.<sha>`, so a rebuild
+installs over the previous one instead of being refused as the same version
+(`0.4.0` < `0.4.0+20260708.f683ae7` < `0.5.0`).
 
 ## Keys (Meld's own)
 
