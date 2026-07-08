@@ -155,10 +155,14 @@ def test_graphics_gutter_has_no_reserved_arrow_columns(files):
             gutter = app.gutters[0]
             assert gutter.size.width == GRAPHIC_IMAGE_COLS
 
-            # every cell is blank: nothing is drawn under the image
-            for y in range(gutter.size.height):
+            # every cell under the image is blank; row 0 is the title rule,
+            # which the gutter carries across so the panes' borders meet
+            from tmeld.gutter import PANE_BORDER_ROWS
+            for y in range(PANE_BORDER_ROWS, gutter.size.height):
                 strip = gutter.render_line(y)
                 assert {seg.text for seg in strip} <= {" ", " " * gutter.size.width}
+            border = "".join(seg.text for seg in gutter.render_line(0))
+            assert border == "─" * gutter.size.width, repr(border)
 
             rgba, w, h, _row, _col = gutter._render_overlay()
             assert w == GRAPHIC_IMAGE_COLS * 9, "image must span the whole gutter"

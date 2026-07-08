@@ -151,3 +151,73 @@ def test_no_chunk_action_on_the_title_border_row(two):
             assert "▶" not in row0 and "◀" not in row0, row0
 
     run(scenario())
+
+
+def test_title_rule_runs_across_the_gutter(two):
+    """The panes' top border must meet in the middle of the ditch.
+
+    Row 0 of the gutter lines up with the panes' title border. Painting it in
+    the gutter's grey left a notch directly above the ditch.
+    """
+    from tmeld.palette import THEMES
+
+    async def scenario():
+        app = TmeldApp(two)
+        async with app.run_test(size=(90, 12)) as pilot:
+            await pilot.pause()
+            view = app.views[0]
+            gutter = view.gutters[0]
+
+            strip = gutter.render_line(0)
+            text = "".join(seg.text for seg in strip)
+            assert text == "─" * gutter.size.width, repr(text)
+
+            # ...on the page, not in the gutter's grey
+            bgs = {seg.style.bgcolor.name.lower() for seg in strip}
+            assert bgs == {THEMES["meld-base"].page_bg.lower()}, bgs
+            assert THEMES["meld-base"].gutter_bg.lower() not in bgs
+
+            # each half continues its own pane's rule
+            left = view.panes[0].styles.border_top[1].hex.lower()
+            right = view.panes[1].styles.border_top[1].hex.lower()
+            assert left != right, "focused and unfocused borders should differ"
+            colours = [seg.style.color.name.lower() for seg in strip]
+            assert colours == [left, right]
+
+    run(scenario())
+
+
+def test_title_rule_follows_focus(two):
+    async def scenario():
+        app = TmeldApp(two)
+        async with app.run_test(size=(90, 12)) as pilot:
+            await pilot.pause()
+            view = app.views[0]
+            gutter = view.gutters[0]
+
+            def halves():
+                strip = gutter.render_line(0)
+                return [seg.style.color.name.lower() for seg in strip]
+
+            view.panes[0].focus()
+            await pilot.pause()
+            first = halves()
+            view.panes[1].focus()
+            await pilot.pause()
+            second = halves()
+            assert first != second, "rule did not re-tint when focus moved"
+            assert first[0] == second[1], "the focused colour should swap sides"
+
+    run(scenario())
+
+
+def test_three_way_joins_both_gutters(three):
+    async def scenario():
+        app = TmeldApp(three)
+        async with app.run_test(size=(120, 12)) as pilot:
+            await pilot.pause()
+            for gutter in app.views[0].gutters:
+                text = "".join(seg.text for seg in gutter.render_line(0))
+                assert text == "─" * gutter.size.width, repr(text)
+
+    run(scenario())

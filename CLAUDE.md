@@ -469,6 +469,14 @@ working context that isn't in either.
   'self'` both hold. GOTCHA while testing: earlier browser probes had pushed and
   SAVED into /tmp/tmeld-demo, so a diff came back "identical" — rerun
   maint/make_demo.py, that is what it is for.
+- Title rule joins across the gutter (user, round 15): gutter row 0 lines up
+  with the panes' `border-top: round`, but rendered gutter_bg — a grey notch
+  directly above the ditch. ActionGutter._border_row() now draws '─' on
+  theme.page_bg, the left half in panes[0]'s border colour and the right half in
+  panes[1]'s, so the two rules meet. Colour comes from `pane.styles.border_top[1]`
+  and therefore tracks focus ($accent vs $border), so FileDiffView refreshes the
+  gutters on on_descendant_focus/blur. Checked before the graphics-mode blank
+  return; the overlay image is placed at row 1 so it never covers the rule.
 - Still open (bmeld): conflict 3-way FROM the VC view (spec ready,
   untested in browser), tier-3 relay transport, Playwright job in CI,
   favicon, dark theme toggle (palette plumbing exists), folder copy/

@@ -243,6 +243,16 @@ class FileDiffView(ComparisonView):
         for gutter in self.gutters:
             gutter.refresh_overlay()
 
+    def on_descendant_focus(self, _event) -> None:
+        # the title rule is drawn in the focused pane's border colour, and the
+        # gutter continues it: redraw when focus moves between panes
+        for gutter in self.gutters:
+            gutter.refresh()
+
+    def on_descendant_blur(self, _event) -> None:
+        for gutter in self.gutters:
+            gutter.refresh()
+
     def on_text_area_selection_changed(
         self, event: TextArea.SelectionChanged
     ) -> None:

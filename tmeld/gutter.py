@@ -13,7 +13,9 @@ arrow replaces it at a chunk start row. Arrows are drawn in the chunk
 foreground color on the plain page background and are click targets.
 
 Panes keep a 1-row top border (title), so gutter row r corresponds to
-pane document line r + scroll - 1.
+pane document line r + scroll - 1. Gutter row 0 is that border: it carries
+each pane's title rule across, the two halves meeting in the middle, rather
+than showing the gutter's own grey above the ditch.
 
 Tier 2 (graphics terminals): the gutter widens to [▶][image area][◀]
 and Meld's anti-aliased linkmap connectors are painted into the middle
@@ -64,6 +66,7 @@ class ActionGutter(GraphicsOverlay, Widget):
     # terminals render it as text in the chunk colour rather than a wide glyph.
     DELETE = "✘"
     BORDER = "│"
+    BORDER_TOP = "─"
 
     def __init__(self, theme_def: Theme, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -116,11 +119,34 @@ class ActionGutter(GraphicsOverlay, Widget):
             return "delete"
         return "replace"
 
+    def _border_row(self) -> Strip:
+        """Carry the panes' title rule across the gutter.
+
+        Gutter row 0 lines up with the panes' top border. Painting it in the
+        gutter's grey left a notch above the ditch; instead each half of the
+        span continues its own pane's rule, and the two meet in the middle.
+        The colour is read from the pane, so a focused pane's rule stays lit
+        all the way to the join.
+        """
+        width = self.size.width
+        page = self.theme_def.page_bg
+        left, right = (
+            self.panes[i].styles.border_top[1].hex for i in (0, 1)
+        )
+        half = (width + 1) // 2
+        return Strip([
+            Segment(self.BORDER_TOP * half, Style(color=left, bgcolor=page)),
+            Segment(self.BORDER_TOP * (width - half),
+                    Style(color=right, bgcolor=page)),
+        ])
+
     def render_line(self, y: int) -> Strip:
         # Meld's linkmap sits on the window background, not the page.
         page = Style(bgcolor=self.theme_def.gutter_bg)
         if len(self.panes) != 2:
             return Strip.blank(self.size.width, page)
+        if y < PANE_BORDER_ROWS:
+            return self._border_row()
         if self.graphics != "none":
             # The overlay image covers every cell, arrows and all.
             return Strip.blank(self.size.width, page)
