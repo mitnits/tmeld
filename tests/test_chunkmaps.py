@@ -170,7 +170,13 @@ def test_title_rule_runs_across_the_gutter(two):
 
             strip = gutter.render_line(0)
             text = "".join(seg.text for seg in strip)
-            assert text == "─" * gutter.size.width, repr(text)
+            # ┬ where a vertical drops out of the rule: text mode's dividers
+            # sit at the gutter edges, not its centre
+            assert text == "┬─┬", repr(text)
+            below = "".join(seg.text for seg in gutter.render_line(1))
+            for x, ch in enumerate(text):
+                if ch == "┬":
+                    assert below[x] == "│", f"┬ at {x} has no line beneath it"
 
             # ...on the page, not in the gutter's grey
             bgs = {seg.style.bgcolor.name.lower() for seg in strip}
@@ -182,8 +188,8 @@ def test_title_rule_runs_across_the_gutter(two):
             left = view.panes[0].styles.border_top[1].hex.lower()
             right = view.panes[1].styles.border_top[1].hex.lower()
             assert left == right, "panes should share one border colour"
-            colours = [seg.style.color.name.lower() for seg in strip]
-            assert colours == [left, right]
+            colours = {seg.style.color.name.lower() for seg in strip}
+            assert colours == {left}
 
     run(scenario())
 
@@ -200,6 +206,8 @@ def test_title_rule_does_not_change_with_focus(two):
             def colours():
                 return [seg.style.color.name.lower()
                         for seg in gutter.render_line(0)]
+
+            # (one segment per cell now that a ┬ can interrupt the run)
 
             view.panes[0].focus()
             await pilot.pause()
@@ -226,6 +234,6 @@ def test_three_way_joins_both_gutters(three):
             await pilot.pause()
             for gutter in app.views[0].gutters:
                 text = "".join(seg.text for seg in gutter.render_line(0))
-                assert text == "─" * gutter.size.width, repr(text)
+                assert text == "┬─┬", repr(text)
 
     run(scenario())

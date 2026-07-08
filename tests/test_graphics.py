@@ -161,8 +161,10 @@ def test_graphics_gutter_has_no_reserved_arrow_columns(files):
             for y in range(PANE_BORDER_ROWS, gutter.size.height):
                 strip = gutter.render_line(y)
                 assert {seg.text for seg in strip} <= {" ", " " * gutter.size.width}
+            # the rule crosses the gutter, with a ┬ marking the seam (no
+            # verticals in graphics mode, so a single junction at the centre)
             border = "".join(seg.text for seg in gutter.render_line(0))
-            assert border == "─" * gutter.size.width, repr(border)
+            assert border == "──┬──", repr(border)
 
             rgba, w, h, _row, _col = gutter._render_overlay()
             assert w == GRAPHIC_IMAGE_COLS * 9, "image must span the whole gutter"

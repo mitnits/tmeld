@@ -67,6 +67,7 @@ class ActionGutter(GraphicsOverlay, Widget):
     DELETE = "✘"
     BORDER = "│"
     BORDER_TOP = "─"
+    JUNCTION = "┬"   # U+252C: the rule turns down into the ditch
 
     def __init__(self, theme_def: Theme, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -119,25 +120,41 @@ class ActionGutter(GraphicsOverlay, Widget):
             return "delete"
         return "replace"
 
+    def _junction_columns(self) -> Tuple[int, ...]:
+        """Columns where a vertical line starts under the title rule.
+
+        In text mode those are the two divider columns, not the middle of the
+        gutter -- a ┬ mid-span would have nothing beneath it. In graphics mode
+        the image carries no verticals, so the single junction marks the seam
+        where the two panes' rules meet.
+        """
+        width = self.size.width
+        if self.graphics == "none":
+            return (0, width - 1)
+        return (width // 2,)
+
     def _border_row(self) -> Strip:
         """Carry the panes' title rule across the gutter.
 
         Gutter row 0 lines up with the panes' top border. Painting it in the
         gutter's grey left a notch above the ditch; instead each half of the
-        span continues its own pane's rule, so the two meet in the middle.
+        span continues its own pane's rule, so the two meet in the middle, and
+        a ┬ is planted wherever a vertical drops out of the rule.
+
         Both panes wear the same colour today, but the halves are drawn from
         their own panes rather than assumed equal.
         """
         width = self.size.width
         page = self.theme_def.page_bg
-        left, right = (
-            self.panes[i].styles.border_top[1].hex for i in (0, 1)
-        )
+        colours = [self.panes[i].styles.border_top[1].hex for i in (0, 1)]
         half = (width + 1) // 2
+        junctions = self._junction_columns()
         return Strip([
-            Segment(self.BORDER_TOP * half, Style(color=left, bgcolor=page)),
-            Segment(self.BORDER_TOP * (width - half),
-                    Style(color=right, bgcolor=page)),
+            Segment(
+                self.JUNCTION if x in junctions else self.BORDER_TOP,
+                Style(color=colours[0 if x < half else 1], bgcolor=page),
+            )
+            for x in range(width)
         ])
 
     def render_line(self, y: int) -> Strip:

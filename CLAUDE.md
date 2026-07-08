@@ -475,6 +475,11 @@ working context that isn't in either.
   theme.page_bg, each half taking its own pane's border colour, so the two rules
   meet. Checked before the graphics-mode blank return; the overlay image is
   placed at row 1, so the rule survives Tier 2.
+  Round 17: ┬ (U+252C) planted where a vertical drops out of the rule.
+  _junction_columns(): in TEXT mode that is the two DIVIDER columns (0 and
+  w-1), NOT the centre — `│ │` means a mid-span ┬ would have nothing beneath it;
+  a test asserts every ┬ has a `│` directly below. In GRAPHICS mode the image
+  carries no verticals, so a single ┬ at the centre marks the seam.
   Round 16: DROPPED `DiffPane:focus { border-top: round $accent }`. Textual's
   accent is ORANGE, so the focused pane recoloured half the joined rule and the
   colour changed sides as focus moved. Every pane now wears $border (#0178d4);
