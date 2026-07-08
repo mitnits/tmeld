@@ -168,14 +168,64 @@ class _Canvas:
             self.blend_pixel(x, y, rgb, max(0.0, min(1.0, cover)) * alpha)
 
 
+class GutterArrow(NamedTuple):
+    """A push arrow or a delete cross, drawn on top of the connector fill.
+
+    Meld's ActionGutter paints the chunk background behind its button, so the
+    icon sits on the chunk's own colour rather than in a reserved column. Since
+    we draw the linkmap as pixels anyway, the icons can live inside it.
+    """
+
+    kind: str        # "push" | "delete"
+    on_right: bool   # right-hand edge (the ◀ column), else the left one
+    top: float       # top of the icon box, in image pixels
+    rgb: RGB
+
+
+def draw_arrow(
+    canvas: "_Canvas", x0: int, top: float, w: int, h: int,
+    rgb: RGB, pointing_right: bool,
+) -> None:
+    """Meld's meld-change-apply icon: a solid arrow with a shaft."""
+    shaft = max(2.0, h / 3.0)
+    head_w = max(3, w // 2)
+    cy = top + h / 2.0
+    for i in range(w):
+        if i < w - head_w:
+            span = (cy - shaft / 2.0, cy + shaft / 2.0)
+        else:
+            t = (i - (w - head_w) + 0.5) / head_w
+            half = (h / 2.0) * (1.0 - t)
+            if half < 0.4:
+                continue
+            span = (cy - half, cy + half)
+        x = x0 + (i if pointing_right else w - 1 - i)
+        canvas.fill_span(x, span[0], span[1], rgb)
+
+
+def draw_delete(
+    canvas: "_Canvas", x0: int, top: float, w: int, h: int, rgb: RGB,
+) -> None:
+    """Meld's meld-change-delete icon: a heavy cross."""
+    thick = max(2.0, min(w, h) / 4.0)
+    for i in range(w):
+        fx = i + 0.5
+        y1 = top + fx * h / w
+        y2 = top + h - fx * h / w
+        canvas.fill_span(x0 + i, y1 - thick / 2.0, y1 + thick / 2.0, rgb)
+        canvas.fill_span(x0 + i, y2 - thick / 2.0, y2 + thick / 2.0, rgb)
+
+
 def render_connectors(
     connectors: Iterable[Connector],
     width_px: int,
     height_px: int,
     theme: Theme,
     background: Optional[str] = None,
+    arrows: Iterable[GutterArrow] = (),
+    arrow_size: Tuple[int, int] = (8, 12),
 ) -> bytearray:
-    """Rasterize connectors to RGBA (straight alpha).
+    """Rasterize connectors (and any gutter icons) to RGBA (straight alpha).
 
     With background=None the image is transparent outside connectors
     (kitty composites it over the cells); sixel callers pass the page
@@ -202,6 +252,18 @@ def render_connectors(
             # 1px stroke bands along both edges (line_width=1.0 upstream)
             canvas.fill_span(x, top - 0.5, top + 0.5, line_rgb)
             canvas.fill_span(x, bottom - 0.5, bottom + 0.5, line_rgb)
+
+    aw, ah = arrow_size
+    for arrow in arrows:
+        if arrow.kind == "delete":
+            # The cross fills its box corner to corner; keep it off the edge.
+            w = max(4, aw - 2)
+            x0 = width_px - w - 1 if arrow.on_right else 1
+            draw_delete(canvas, x0, arrow.top + 1, w, max(4, ah - 2), arrow.rgb)
+        else:
+            x0 = width_px - aw if arrow.on_right else 0
+            draw_arrow(canvas, x0, arrow.top, aw, ah, arrow.rgb,
+                       pointing_right=not arrow.on_right)
     return canvas.data
 
 

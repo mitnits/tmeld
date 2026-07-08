@@ -30,16 +30,22 @@ from textual import events
 from textual.strip import Strip
 from textual.widget import Widget
 
-from tmeld.linkmap import connectors_for_chunks, render_connectors
+from tmeld.linkmap import (
+    GutterArrow,
+    _hex_rgb,
+    connectors_for_chunks,
+    render_connectors,
+)
 from tmeld.overlay import GraphicsOverlay, OverlayImage
 from tmeld.palette import Theme
 
 PANE_BORDER_ROWS = 1
 
-# Width of the pixel-linkmap area, in cells, between the arrow columns.
-# Meld's own linkmap is ~50px ≈ 5-6 cells including arrows; 4 + 2 arrow
-# columns matches that (7 was too much — user round 7).
-GRAPHIC_IMAGE_COLS = 4
+# Graphics mode draws the whole gutter as one image, arrows included: the icons
+# are rasterized onto the connector fill exactly as Meld's ActionGutter paints
+# its button over the chunk background. That frees the two cells the ▶/◀
+# columns used to occupy, and one goes back into the curves (user, round 9).
+GRAPHIC_IMAGE_COLS = 5
 
 PushCallback = Callable[[int, int, int], None]  # (src, dst, chunk_index)
 DeleteCallback = Callable[[int, int], None]  # (src, chunk_index)
@@ -83,7 +89,7 @@ class ActionGutter(GraphicsOverlay, Widget):
     def on_mount(self) -> None:
         self._init_graphics()
         if self.graphics != "none":
-            self.styles.width = 2 + GRAPHIC_IMAGE_COLS
+            self.styles.width = GRAPHIC_IMAGE_COLS
 
     def set_starts(self, starts: List[Dict[int, tuple]]) -> None:
         """Per-column arrow positions from Comparison.action_starts:
@@ -111,11 +117,15 @@ class ActionGutter(GraphicsOverlay, Widget):
         return "replace"
 
     def render_line(self, y: int) -> Strip:
-        page = Style(bgcolor=self.theme_def.page_bg)
+        # Meld's linkmap sits on the window background, not the page.
+        page = Style(bgcolor=self.theme_def.gutter_bg)
         if len(self.panes) != 2:
             return Strip.blank(self.size.width, page)
+        if self.graphics != "none":
+            # The overlay image covers every cell, arrows and all.
+            return Strip.blank(self.size.width, page)
         border_style = Style(
-            color=self.theme_def.unknown_fg, bgcolor=self.theme_def.page_bg
+            color=self.theme_def.unknown_fg, bgcolor=self.theme_def.gutter_bg
         )
         doc_line = [self._doc_line(0, y), self._doc_line(1, y)]
         in_pane = [
@@ -129,12 +139,11 @@ class ActionGutter(GraphicsOverlay, Widget):
             action = self._action(col) if entry is not None else None
             if action is not None:
                 _index, tag = entry
-                chunk_style = self.theme_def.chunk.get(tag)
-                fg = chunk_style.fg if chunk_style else None
+                fg = self.theme_def.chunk_fg(tag)
                 glyph = self.DELETE if action == "delete" else self.ARROWS[col]
                 seg = Segment(
                     glyph,
-                    Style(color=fg, bgcolor=self.theme_def.page_bg, bold=True),
+                    Style(color=fg, bgcolor=self.theme_def.gutter_bg, bold=True),
                 )
             elif in_pane[col] and self.graphics == "none":
                 seg = Segment(self.BORDER, border_style)
@@ -166,7 +175,7 @@ class ActionGutter(GraphicsOverlay, Widget):
         if len(self.panes) != 2 or self.pair_changes is None:
             return None
         region = self.content_region
-        image_cols = self.size.width - 2
+        image_cols = self.size.width
         image_rows = self.size.height - PANE_BORDER_ROWS
         if image_cols <= 0 or image_rows <= 0 or not region.width:
             return None
@@ -189,14 +198,44 @@ class ActionGutter(GraphicsOverlay, Widget):
             if max(c.f1, c.t1) >= 0 and min(c.f0, c.t0) <= height_px
         ]
         background = (
-            None if self.graphics == "kitty"
-            else (self.theme_def.page_bg or "#000000")
+            None if self.graphics == "kitty" else self.theme_def.gutter_bg
         )
+        arrow_w = max(5, min(cell_w, width_px // 3))
+        arrow_h = max(6, min(cell_h - 4, 12))
         rgba = render_connectors(
             connectors, width_px, height_px, self.theme_def,
             background=background,
+            arrows=self._arrows(cell_h, arrow_h, image_rows),
+            arrow_size=(arrow_w, arrow_h),
         )
         return (
             rgba, width_px, height_px,
-            region.y + PANE_BORDER_ROWS, region.x + 1,
+            region.y + PANE_BORDER_ROWS, region.x,
         )
+
+    def _arrows(self, cell_h: int, arrow_h: int, image_rows: int):
+        """Push/delete icons for the chunks currently on screen.
+
+        The same rule as render_line: an entry exists only where that side has
+        lines to push, and _action() decides between an arrow, a cross, and
+        nothing at all.
+        """
+        out = []
+        for col in (0, 1):
+            action = self._action(col)
+            if action is None:
+                continue
+            scroll = int(self.panes[col].scroll_offset.y)
+            for doc_line, (_index, tag) in self._starts[col].items():
+                row = doc_line - scroll
+                if not 0 <= row < image_rows:
+                    continue
+                if tag not in self.theme_def.chunk:
+                    continue
+                out.append(GutterArrow(
+                    kind="delete" if action == "delete" else "push",
+                    on_right=(col == 1),
+                    top=row * cell_h + (cell_h - arrow_h) / 2.0,
+                    rgb=_hex_rgb(self.theme_def.chunk_fg(tag)),
+                ))
+        return out

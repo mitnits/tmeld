@@ -384,6 +384,24 @@ working context that isn't in either.
     own lens and click-to-jump.
   Not gaps: Meld renders the text black (no syntax colouring), and has no
   GtkPaned (panes are not user-resizable there either).
+- TUI gutter, round 9 (user's idea): in GRAPHICS mode the ▶/◀ no longer own
+  two reserved cells — they are RASTERIZED INTO the linkmap image, exactly as
+  Meld's ActionGutter paints its button over the chunk fill
+  (actiongutter.py: snapshot.append_color(fill_colors[change_type], rect), then
+  a symbolic icon on top). linkmap.draw_arrow / draw_delete rasterize Meld's
+  arrow-with-shaft and heavy cross via _Canvas.fill_span (both x-monotone per
+  column, or two spans for the cross). GRAPHIC_IMAGE_COLS 4 -> 5 and gutter
+  width = GRAPHIC_IMAGE_COLS (was 2 + that): net 1 cell saved per gutter (2 in
+  a 3-way) and the curves get 25% more width. render_line returns blank cells
+  in graphics mode; on_click is unchanged (cells 0 and w-1 still hit-test).
+  Text mode (Tier 1) keeps the 3-cell ▶ │ ◀ — no image to draw into.
+  GOTCHA: theme.chunk['delete'].fill/line are aliased to insert (one-sided
+  lines are green) but its fg stays meld:delete's dark red, which the DIR TREE
+  uses for removed files. An icon on the green fill must not be red, so
+  Theme.chunk_fg(tag) maps delete->insert; don't "fix" the palette instead.
+  Gutter background is now Theme.gutter_bg = blend(page_bg, text_fg, 0.06) in
+  BOTH modes (kitty composites over the cells, sixel bakes it in) — Meld's
+  linkmap sits on the window background, not the page.
 - Still open (bmeld): conflict 3-way FROM the VC view (spec ready,
   untested in browser), tier-3 relay transport, Playwright job in CI,
   favicon, dark theme toggle (palette plumbing exists), folder copy/

@@ -53,6 +53,17 @@ class Theme:
     # meld:current-chunk-highlight — white at alpha, composited over fills
     emphasis_color: str = "#ffffff"
     emphasis_alpha: float = 0.5
+
+    @property
+    def gutter_bg(self) -> str:
+        """Meld's linkmap sits on the window background, a touch off the page.
+
+        Terminals have no alpha, so pre-composite the way blend() does for the
+        chunk fills. Works in both directions: on a dark scheme the light text
+        colour lifts the channel instead of darkening it.
+        """
+        base = self.page_bg or ("#000000" if self.dark else "#ffffff")
+        return blend(base, self.text_fg, 0.06)
     # map-overlay rgba(100,100,100,0.4) — composited over map cells
     overlay_color: str = "#646464"
     overlay_alpha: float = 0.4
@@ -62,6 +73,16 @@ class Theme:
         if emphasized:
             fill = blend(fill, self.emphasis_color, self.emphasis_alpha)
         return fill
+
+    def chunk_fg(self, tag: str) -> str:
+        """Foreground for a gutter icon sitting on this chunk's fill.
+
+        Meld aliases a "delete" chunk's fill and line to insert -- one-sided
+        lines are green on whichever pane has them -- but meld:delete keeps its
+        own dark-red foreground, which the dir tree uses for removed files. An
+        icon drawn on the green fill has to follow the fill, not the tag.
+        """
+        return self.chunk["insert" if tag == "delete" else tag].fg
 
     def overlay(self, base: str) -> str:
         return blend(base, self.overlay_color, self.overlay_alpha)

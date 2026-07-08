@@ -106,8 +106,10 @@ def test_gutter_row_patterns(paths):
     rows = run(scenario())
     assert rows["quiet"] == "│ │"
     assert rows["both"] == "▶ ◀"
-    # Arrows sit on the page background, not a colored pill
-    assert set(rows["arrow_seg_bg"]) == {"#ffffff"}
+    # Arrows sit on the gutter's own background, not a colored pill. Meld's
+    # linkmap is the window background, a touch off the page.
+    from tmeld.palette import THEMES
+    assert set(rows["arrow_seg_bg"]) == {THEMES["meld-base"].gutter_bg}
 
 
 def test_gutter_left_only_pattern(paths):

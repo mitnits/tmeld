@@ -51,13 +51,14 @@ def test_kitty_mode_widens_gutter_and_paints(files):
             await pilot.pause()
             gutter = app.gutters[0]
             assert gutter.graphics == "kitty"
-            assert gutter.size.width == 2 + GRAPHIC_IMAGE_COLS
+            # the whole gutter is the image now: the arrows are painted into
+            # it rather than occupying two reserved cells
+            assert gutter.size.width == GRAPHIC_IMAGE_COLS
             assert written, "no overlay written after mount"
             escape = written[-1]
             assert "\x1b_G" in escape and "a=T" in escape
             # image sized from cell_px and the gutter's cell geometry
-            image_cols = gutter.size.width - 2
-            assert f"s={image_cols * 10}" in escape
+            assert f"s={gutter.size.width * 10}" in escape
             # positioned via CUP inside a cursor save/restore
             assert escape.startswith("\x1b7\x1b[") and escape.endswith("\x1b8")
 
@@ -139,3 +140,79 @@ def test_chunkmap_paints_pixel_overlay(files):
             assert f"v={chunkmap.content_region.height * 16}" in escape
 
     run(scenario())
+
+
+def test_graphics_gutter_has_no_reserved_arrow_columns(files):
+    """The icons are rasterized into the linkmap, so no cells are set aside.
+
+    Meld's ActionGutter paints the chunk fill behind its button; drawing the
+    linkmap as pixels lets the icons live inside it, freeing two cells.
+    """
+    async def scenario():
+        app = TmeldApp(files, graphics="kitty", cell_px=(9, 19))
+        async with app.run_test(size=(60, 14)) as pilot:
+            await pilot.pause()
+            gutter = app.gutters[0]
+            assert gutter.size.width == GRAPHIC_IMAGE_COLS
+
+            # every cell is blank: nothing is drawn under the image
+            for y in range(gutter.size.height):
+                strip = gutter.render_line(y)
+                assert {seg.text for seg in strip} <= {" ", " " * gutter.size.width}
+
+            rgba, w, h, _row, _col = gutter._render_overlay()
+            assert w == GRAPHIC_IMAGE_COLS * 9, "image must span the whole gutter"
+
+    run(scenario())
+
+
+def test_gutter_icons_are_drawn_into_the_image(files):
+    async def scenario():
+        app = TmeldApp(files, graphics="kitty", cell_px=(9, 19))
+        async with app.run_test(size=(60, 14)) as pilot:
+            await pilot.pause()
+            gutter = app.gutters[0]
+            arrows = gutter._arrows(19, 12, gutter.size.height - 1)
+            assert arrows, "no icons for the visible chunks"
+            assert {a.kind for a in arrows} == {"push"}
+            assert {a.on_right for a in arrows} == {False, True}
+
+            # an icon on the left edge must colour pixels there
+            rgba, w, h, _r, _c = gutter._render_overlay()
+            top = int(arrows[0].top) + 6
+            px = lambda x, y: tuple(rgba[(y * w + x) * 4:(y * w + x) * 4 + 4])
+            assert px(1, top)[3] > 0, "left icon painted no pixels"
+
+    run(scenario())
+
+
+def test_delete_icon_replaces_the_arrow_toward_a_readonly_pane(files):
+    from tmeld.comparisonview import ComparisonView
+
+    async def scenario():
+        app = TmeldApp(files, graphics="kitty", cell_px=(9, 19))
+        async with app.run_test(size=(60, 14)) as pilot:
+            await pilot.pause()
+            app.post_message(ComparisonView.OpenComparison(list(files), readonly=(0,)))
+            await pilot.pause()
+            await pilot.pause()
+            gutter = app.views[-1].gutters[0]
+            arrows = gutter._arrows(19, 12, gutter.size.height - 1)
+            kinds = {(a.on_right, a.kind) for a in arrows}
+            # ▶ copies out of the read-only pane; ◀ would write into it
+            assert (False, "push") in kinds
+            assert (True, "delete") in kinds
+            assert (True, "push") not in kinds
+
+    run(scenario())
+
+
+def test_icon_colour_follows_the_fill_not_the_tag():
+    """A one-sided chunk is green; its icon must not be meld:delete's red."""
+    from tmeld.palette import THEMES
+
+    theme = THEMES["meld-base"]
+    assert theme.chunk["delete"].fill == theme.chunk["insert"].fill
+    assert theme.chunk["delete"].fg != theme.chunk["insert"].fg  # upstream quirk
+    assert theme.chunk_fg("delete") == theme.chunk["insert"].fg
+    assert theme.chunk_fg("replace") == theme.chunk["replace"].fg
