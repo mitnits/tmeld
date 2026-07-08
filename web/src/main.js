@@ -13,7 +13,9 @@
 import {
   EditorView, lineNumbers, keymap, Decoration,
 } from "@codemirror/view";
-import { EditorState, StateField, StateEffect, Prec } from "@codemirror/state";
+import {
+  EditorState, StateField, StateEffect, Prec, Compartment,
+} from "@codemirror/state";
 import { history, historyKeymap, defaultKeymap } from "@codemirror/commands";
 import {
   calcSyncpoint, interpolateLine, scrollOffsetForLine, SCROLL_INFLUENCE,
@@ -75,6 +77,17 @@ function buildDecorations(state, chunks, inline, emphRanges) {
   const emphasized = (line) =>
     emphRanges.some(([s, e]) => line >= s && line < e);
   for (const [tag, s, e] of chunks) {
+    if (s === e) {
+      // A chunk with no lines on this side: the other pane is adding text
+      // here. Meld skips the fill and draws only the 1px top+bottom borders
+      // of a 2px-high rect (sourceview.py do_snapshot), so they collapse into
+      // one thin line in the chunk's colour, marking where the text lands.
+      const atEof = s >= doc.lines;
+      const line = doc.line(atEof ? doc.lines : s + 1);
+      const cls = `bm-mark bm-mark-${tag}` + (atEof ? " bm-mark-end" : "");
+      ranges.push(Decoration.line({ class: cls }).range(line.from));
+      continue;
+    }
     for (let ln = s; ln < e && ln < doc.lines; ln++) {
       let cls = `bm-${tag}`;
       if (ln === s) cls += " bm-first";
@@ -98,6 +111,30 @@ function buildDecorations(state, chunks, inline, emphRanges) {
 // --- FileTab --------------------------------------------------------------------
 
 const svgNS = "http://www.w3.org/2000/svg";
+const LOCKED = [EditorState.readOnly.of(true), EditorView.editable.of(false)];
+
+// Meld's gutter icons (meld-change-apply-right / meld-change-delete), traced
+// from the 16x16 originals: a solid arrow with a shaft, and a heavy cross.
+// Drawn rather than typeset -- no monospace font carries a matching pair of
+// heavy left/right arrows at a single cell width.
+const ICON_ARROW = "M0 5.5 h8 V2 l6.5 6 -6.5 6 v-3.5 h-8 Z";
+const ICON_DELETE =
+  "M3.2 1.5 L8 6.3 L12.8 1.5 L14.5 3.2 L9.7 8 L14.5 12.8 L12.8 14.5 " +
+  "L8 9.7 L3.2 14.5 L1.5 12.8 L6.3 8 L1.5 3.2 Z";
+
+function iconSvg(path, flip) {
+  const svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("viewBox", "0 0 16 16");
+  svg.setAttribute("width", "14");
+  svg.setAttribute("height", "14");
+  svg.setAttribute("aria-hidden", "true");
+  const p = document.createElementNS(svgNS, "path");
+  p.setAttribute("d", path);
+  p.setAttribute("fill", "currentColor");
+  if (flip) p.setAttribute("transform", "translate(16,0) scale(-1,1)");
+  svg.appendChild(p);
+  return svg;
+}
 
 class FileTab {
   constructor(container, data) {
@@ -175,15 +212,14 @@ class FileTab {
     save.className = "bm-save";
     save.style.visibility = "hidden";
     save.addEventListener("click", () => this.savePane(i));
+    let lock = null;
     if (this.readonly.has(i)) {
-      // Meld shows a lock in each pane's action bar when the file is not
-      // writable (changes-prevent-symbolic). Ours is indicative only: Meld's
-      // is a toggle that unlocks the buffer for a save-as, which we have no
-      // UI for yet.
-      const lock = document.createElement("span");
+      // Meld puts a lock toggle in each pane's action bar when the file isn't
+      // writable. Clicking it unlocks the *buffer*, not the file: you may then
+      // edit, but the save will fail unless it goes somewhere else.
+      lock = document.createElement("button");
       lock.className = "bm-lock";
-      lock.textContent = "🔒";
-      lock.title = "This file can not be written to.";
+      lock.addEventListener("click", () => this.toggleLock(i));
       title.appendChild(lock);
     }
     title.appendChild(label);
@@ -192,7 +228,8 @@ class FileTab {
     const host = document.createElement("div");
     host.className = "bm-editor";
     const tab = this;
-    const readonly = (data.readonly || []).includes(i);
+    const readonly = this.readonly.has(i);
+    const editable = new Compartment();
     const extensions = [
       lineNumbers(),
       history(),
@@ -210,12 +247,9 @@ class FileTab {
         }
       }),
       EditorView.theme({ "&": { height: "100%" } }),
+      editable.of(readonly ? LOCKED : []),
     ];
-    if (readonly) {
-      extensions.push(EditorState.readOnly.of(true));
-      extensions.push(EditorView.editable.of(false));
-      title.classList.add("bm-readonly");
-    }
+    if (readonly) title.classList.add("bm-readonly");
     const view = new EditorView({
       state: EditorState.create({ doc: data.texts[i], extensions }),
       parent: host,
@@ -225,10 +259,35 @@ class FileTab {
     cell.appendChild(title);
     cell.appendChild(host);
     this.panes[i] = {
-      view, titleEl: title, saveBtn: save,
+      view, titleEl: title, saveBtn: save, lockBtn: lock, editable,
       dirty: false, chunks: [], inline: [],
     };
+    if (lock) this.paintLock(i);
     return cell;
+  }
+
+  paintLock(i) {
+    const pane = this.panes[i];
+    const locked = this.readonly.has(i);
+    pane.lockBtn.textContent = locked ? "🔒" : "🔓";
+    pane.lockBtn.title = locked
+      ? "This file can not be written to. Click to unlock it and make changes "
+        + "anyway, but those changes must be saved to a new file."
+      : "Unlocked. Saving to this file will still fail; save elsewhere.";
+    pane.titleEl.classList.toggle("bm-readonly", locked);
+    pane.titleEl.classList.toggle("bm-unlocked", !locked);
+  }
+
+  /** Meld's readonly toggle: unlock the buffer, not the file. */
+  toggleLock(i) {
+    const locked = this.readonly.has(i);
+    if (locked) this.readonly.delete(i);
+    else this.readonly.add(i);
+    this.panes[i].view.dispatch({
+      effects: this.panes[i].editable.reconfigure(locked ? [] : LOCKED),
+    });
+    this.paintLock(i);
+    this.renderOverlays();   // push arrows come back / go away
   }
 
   activate() {
@@ -388,7 +447,8 @@ class FileTab {
     const del = action === "delete";
     const btn = document.createElement("button");
     btn.className = del ? "bm-arrow bm-arrow-delete" : "bm-arrow";
-    btn.textContent = del ? "✕" : arrow;
+    btn.appendChild(del ? iconSvg(ICON_DELETE, false)
+                        : iconSvg(ICON_ARROW, arrow === "◀"));
     btn.title = del
       ? "Delete this change (the other file is read-only)"
       : "Copy this change to the other file";

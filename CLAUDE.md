@@ -309,6 +309,31 @@ working context that isn't in either.
   and TCPSite gets shutdown_timeout=1.0. exit_status() returns 130 when
   interrupted (128+SIGINT, so `git mergetool` sees a failure even if the
   merge was saved). Measured: 15s+ -> 0.10s. 159 tests green.
+- Read-only parity (2026-07-08, user spotted it in real Meld):
+  upstream ActionGutter._classify_change_actions -> if the TARGET pane isn't
+  editable the push arrow becomes a DELETE (✕) that removes the chunk from the
+  SOURCE; both panes read-only = no button; source-side "insert" chunks never
+  had one. Ported to tmeld/gutter.py (_action) and bmeld (FileTab.chunkAction).
+  GOTCHA: EditorState.readOnly only blocks *user* input -- pushPair's
+  programmatic dispatch wrote into read-only panes; all edits go via editPane().
+  Lock: Meld's readonlytoggle (changes-prevent-symbolic), visible = not
+  writable, and CLICKABLE -- it unlocks the *buffer*, not the file, so the save
+  then fails (Meld's tooltip says save to a new file). bmeld implements the
+  toggle with a CM Compartment; TUI shows 🔒 in the pane title (not clickable:
+  border_title has no click hook).
+  Insert marker: Meld draws EVERY chunk with append_border([1,0,1,0]) in the
+  line colour on a rect of height max(1, y1-y0)+1 -- so a zero-height chunk
+  collapses to one 2px line marking where the other pane's text lands, with no
+  fill (sourceview.py do_snapshot). bmeld: .bm-mark box-shadow, verified as
+  exactly 2px of #a5ff4c. TUI: NOT POSSIBLE in Tier 1 -- neither rich.Style nor
+  textual.style.Style exposes an underline colour (SGR 58), and there is no
+  sub-cell drawing between rows. Options are a colourless underline on the row
+  above, or a Tier-2 pixel overlay drawn over the pane (deferred).
+  Icons: Meld's meld-change-apply-right is a solid arrow WITH A SHAFT and
+  meld-change-delete a heavy cross. bmeld now draws both as inline SVG paths
+  (currentColor). TUI keeps ▶ ◀ and upgrades ✕ -> ✘ (U+2718): ➡/⬅ have emoji
+  presentation, so terminals render them double-width in a fixed colour --
+  no single-cell heavy arrow pair exists. 164 tests green.
 - Still open (bmeld): conflict 3-way FROM the VC view (spec ready,
   untested in browser), tier-3 relay transport, Playwright job in CI,
   favicon, dark theme toggle (palette plumbing exists), folder copy/

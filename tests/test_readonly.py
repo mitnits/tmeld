@@ -80,7 +80,7 @@ def test_gutter_draws_delete_glyph_toward_readonly_pane(paths):
                     glyphs.add(seg.text)
             # ▶ copies out of the read-only left pane: still offered.
             # ◀ would write into it: replaced by ✕.
-            assert ActionGutter.DELETE in glyphs, glyphs
+            assert ActionGutter.DELETE in glyphs, glyphs  # ✘, not a glyph literal
             assert "◀" not in glyphs, glyphs
             assert "▶" in glyphs, glyphs
 

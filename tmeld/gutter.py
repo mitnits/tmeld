@@ -53,7 +53,10 @@ class ActionGutter(GraphicsOverlay, Widget):
     """
 
     ARROWS = ("▶", "◀")
-    DELETE = "✕"
+    # U+2718 heavy ballot X: matches Meld's heavy meld-change-delete icon,
+    # one cell wide, and (unlike ✖ U+2716 or ❌) has no emoji presentation, so
+    # terminals render it as text in the chunk colour rather than a wide glyph.
+    DELETE = "✘"
     BORDER = "│"
 
     def __init__(self, theme_def: Theme, **kwargs) -> None:

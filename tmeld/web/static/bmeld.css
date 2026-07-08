@@ -159,9 +159,20 @@ body {
 }
 .bm-title .bm-label { overflow: hidden; text-overflow: ellipsis; }
 .bm-title.bm-dirty .bm-label::after { content: " •"; color: #c33; }
-/* Meld's changes-prevent-symbolic: the file can not be written to. */
-.bm-lock { flex: none; font-size: 11px; line-height: 1; cursor: help; }
+/* Meld's readonly toggle (changes-prevent-symbolic). Clicking unlocks the
+   buffer, not the file -- a save still fails, as it does in Meld. */
+.bm-lock {
+  flex: none;
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+.bm-lock:hover { transform: scale(1.15); }
 .bm-title.bm-readonly .bm-label { color: var(--bm-unknown-fg); }
+.bm-title.bm-unlocked .bm-label { font-style: italic; }
 .bm-save {
   margin-left: auto;
   font-size: 11px;
@@ -205,6 +216,17 @@ body {
   box-shadow: inset 0 1px 0 var(--l), inset 0 -1px 0 var(--l);
 }
 
+/* Zero-height chunk: the other pane adds lines here. No fill -- just Meld's
+   2px line in the chunk colour, showing where the text would land. Uses its
+   own `--m` so it never collides with a real chunk's `--l` box-shadow. */
+.bm-mark-insert   { --m: var(--bm-insert-line); }
+.bm-mark-delete   { --m: var(--bm-delete-line); }
+.bm-mark-replace  { --m: var(--bm-replace-line); }
+.bm-mark-conflict { --m: var(--bm-conflict-line); }
+.bm-mark-error    { --m: var(--bm-error-line); }
+.cm-line.bm-mark { box-shadow: inset 0 2px 0 var(--m); }
+.cm-line.bm-mark.bm-mark-end { box-shadow: inset 0 -2px 0 var(--m); }
+
 .bm-inline { background: var(--bm-inline-bg); }
 
 /* --- gutters (connectors + push arrows) --------------------------------- */
@@ -224,14 +246,13 @@ body {
   padding: 0;
   border: none;
   background: transparent;
-  font-size: 10px;
-  line-height: 14px;
+  line-height: 0;
   cursor: pointer;
-  font-weight: bold;
 }
+.bm-arrow svg { display: block; }
 .bm-arrow:hover { transform: scale(1.3); }
-/* Target pane is read-only: the only action is to drop the change. */
-.bm-arrow-delete { font-size: 11px; }
+/* The heavy cross reads bolder than the arrow at the same box; even them up. */
+.bm-arrow-delete svg { width: 12px; height: 12px; margin: 1px; }
 
 /* --- chunkmap ------------------------------------------------------------ */
 

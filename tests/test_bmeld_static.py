@@ -50,18 +50,29 @@ def test_every_bm_class_in_css_is_used_by_the_client():
     def interpolated(cls: str) -> bool:
         if re.match(r"bm-(insert|delete|replace|conflict|error)$", cls):
             return True
-        if cls.startswith("bm-pane-") and "bm-pane-${" in MAIN_JS:
-            return True
-        return cls.startswith("bm-st-") and "bm-st-${" in MAIN_JS
+        for prefix in ("bm-pane-", "bm-mark-", "bm-st-"):
+            if cls.startswith(prefix) and prefix + "${" in MAIN_JS:
+                return True
+        return False
     dead = sorted(c for c in classes - used if not interpolated(c))
     assert not dead, f"CSS .bm-* rules never applied by main.js: {dead}"
 
 
 def test_overlay_svgs_carry_no_viewbox():
-    """User units must map 1:1 to CSS px: no scale, no preserveAspectRatio."""
-    assert 'setAttribute("viewBox"' not in MAIN_JS, (
-        "a viewBox whose height lags the element's is centred by the default "
-        "preserveAspectRatio, silently offsetting every connector"
+    """User units must map 1:1 to CSS px: no scale, no preserveAspectRatio.
+
+    The connector and chunkmap SVGs are sized in CSS pixels of their own box.
+    A viewBox whose height lags the element's gets centred by the default
+    preserveAspectRatio, silently offsetting every connector. Icons are
+    different: they are intrinsically 16x16 art and *want* a viewBox.
+    """
+    occurrences = [m.start() for m in re.finditer(r'setAttribute\("viewBox"', MAIN_JS)]
+    icon_start = MAIN_JS.index("function iconSvg")
+    icon_end = MAIN_JS.index("class FileTab")
+    stray = [o for o in occurrences if not icon_start < o < icon_end]
+    assert not stray, (
+        f"{len(stray)} viewBox set outside iconSvg(); the overlay SVGs must "
+        "map user units 1:1 to CSS pixels"
     )
 
 
