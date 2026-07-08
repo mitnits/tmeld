@@ -119,6 +119,32 @@ body {
 /* --- panes ------------------------------------------------------------- */
 
 .bm-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+/* Keep scrollbars away from the linkmap gutters, so a connector always meets
+   the chunk fill it belongs to. Meld gets this for free: GTK draws thin
+   auto-hiding overlay scrollbars. The browser gives us a solid 13px bar that
+   would sit between the fill and the curve, so:
+
+     [sb][nums] text  ‹gutter›  text [nums][sb]
+
+   The first pane's bar moves to its left edge with `direction: rtl` on the
+   scroll container (that is what positions a scrollbar). Because flex lays
+   items along the writing direction, the row must also be reversed so the
+   line-number gutter stays inboard of the bar rather than flipping to the
+   right; the gutter and content are put back to `ltr` so the text is normal.
+
+   A middle pane (3-way) is sandwiched between two gutters and cannot win
+   either way, so it hides its bar; it stays sync-scrolled to its neighbours
+   and remains scrollable by wheel, keyboard and chunkmap. */
+.bm-pane-first .cm-scroller {
+  direction: rtl;
+  flex-direction: row-reverse;
+}
+.bm-pane-first .cm-gutters,
+.bm-pane-first .cm-content { direction: ltr; }
+
+.bm-pane-mid .cm-scroller { scrollbar-width: none; }
+.bm-pane-mid .cm-scroller::-webkit-scrollbar { display: none; }
 .bm-title {
   height: 30px;
   display: flex;

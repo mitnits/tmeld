@@ -50,6 +50,8 @@ def test_every_bm_class_in_css_is_used_by_the_client():
     def interpolated(cls: str) -> bool:
         if re.match(r"bm-(insert|delete|replace|conflict|error)$", cls):
             return True
+        if cls.startswith("bm-pane-") and "bm-pane-${" in MAIN_JS:
+            return True
         return cls.startswith("bm-st-") and "bm-st-${" in MAIN_JS
     dead = sorted(c for c in classes - used if not interpolated(c))
     assert not dead, f"CSS .bm-* rules never applied by main.js: {dead}"
@@ -78,3 +80,24 @@ def test_connector_edges_are_snapped_and_inset():
     """The connector attaches to the pane fill, not half a pixel above it."""
     assert "snapY(" in MAIN_JS, "connector edges must snap to the device-pixel grid"
     assert "chunkEdges(" in MAIN_JS, "connector edges must be inset like box-shadow"
+
+
+def test_no_scrollbar_sits_against_a_linkmap_gutter():
+    """Panes are tagged by position so CSS can keep scrollbars off the gutters.
+
+    The first pane's bar moves left (`direction: rtl` on the scroll container,
+    with the flex row reversed so the line numbers stay inboard); a middle pane
+    is between two gutters and can't win, so it hides its bar.
+    """
+    assert re.search(r"bm-pane-\$\{where\}|bm-pane-\$\{", MAIN_JS), (
+        "panes must carry a position class for the scrollbar rules"
+    )
+    css = _css_selectors_stripped_of_comments()
+    first = re.search(r"\.bm-pane-first \.cm-scroller\s*\{([^}]*)\}", css)
+    assert first, ".bm-pane-first .cm-scroller rule missing"
+    assert "direction: rtl" in first.group(1)
+    # without reversing the row, rtl flips the line-number gutter to the right
+    assert "flex-direction: row-reverse" in first.group(1)
+    # ...and the text itself must stay left-to-right
+    assert re.search(r"\.bm-pane-first \.cm-content\s*\{[^}]*direction: ltr", css)
+    assert re.search(r"\.bm-pane-mid \.cm-scroller\s*\{[^}]*scrollbar-width: none", css)

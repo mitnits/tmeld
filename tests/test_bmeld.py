@@ -384,3 +384,42 @@ def test_build_id_tracks_asset_contents(tmp_path, monkeypatch):
     finally:
         css.write_bytes(original)
     assert srv.build_id() == before
+
+
+def test_interrupt_exits_promptly_with_130(three):
+    """One Ctrl-C is enough: live sockets are closed rather than waited on."""
+    async def scenario():
+        session = make_session(three)
+        client = await client_for(session)
+        try:
+            ws = await client.ws_connect(f"/ws/{TOKEN}")
+            await recv(ws)  # init
+            assert session._websockets, "server should track the live socket"
+
+            session.interrupt()
+            assert session.closed.is_set()
+            assert session.exit_status() == 130
+
+            await asyncio.wait_for(session.close_websockets(), timeout=2)
+            # Drain what the session had already queued (chunks, ...); the
+            # point is a close frame arrives without the client sending more.
+            closing = {aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.CLOSED,
+                       aiohttp.WSMsgType.CLOSING}
+            while True:
+                msg = await asyncio.wait_for(ws.receive(), timeout=2)
+                if msg.type in closing:
+                    break
+        finally:
+            await client.close()
+
+    run(scenario())
+
+
+def test_interrupt_beats_the_saved_merge_exit_code(three):
+    """Aborting must not look like a completed merge."""
+    session = make_session(three)
+    for tab in session.merge_saved:
+        session.merge_saved[tab] = True
+    assert session.exit_status() == 0
+    session.interrupt()
+    assert session.exit_status() == 130

@@ -99,9 +99,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         elif not args.no_open:
             webbrowser.open(url)
 
-    return asyncio.run(
-        run_session(session, token, port=args.port, on_url=announce)
-    )
+    try:
+        return asyncio.run(
+            run_session(session, token, port=args.port, on_url=announce)
+        )
+    except KeyboardInterrupt:
+        # run_session normally handles SIGINT itself and returns 130; this is
+        # the fallback where add_signal_handler is unavailable (Windows).
+        return 130
 
 
 if __name__ == "__main__":

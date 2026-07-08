@@ -158,7 +158,11 @@ class FileTab {
 
   makePane(i, data) {
     const cell = document.createElement("div");
-    cell.className = "bm-pane";
+    // Position class drives which side this pane's scrollbar sits on, so that
+    // no scrollbar ever lands against a linkmap gutter. See bmeld.css.
+    const where = i === 0 ? "first"
+      : i === this.numPanes - 1 ? "last" : "mid";
+    cell.className = `bm-pane bm-pane-${where}`;
     const title = document.createElement("div");
     title.className = "bm-title";
     const label = document.createElement("span");

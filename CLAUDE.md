@@ -286,6 +286,29 @@ working context that isn't in either.
   pinned grid row, snapped+inset edges) — verified to fail pre-fix.
   154 tests green. Connector now butts the fill pixel-exactly (verified
   by sampling the junction column, scrolled and unscrolled).
+- bmeld B6 (2026-07-08): footer shows `bmeld <ver> · <build>` where build =
+  sha256[:8] of the served bmeld.{js,css}+index.html; the same id is appended
+  to the asset URLs (?v=) and index.html is no-store, so a cached bundle can
+  never be served (user asked for this to settle "am I running your fix?").
+  Scrollbars: my grid fix made panes actually scroll, so a 13-15px bar
+  appeared between the chunk fill and the connector. Panes now carry
+  bm-pane-{first,mid,last}; first pane's bar moves to its LEFT edge via
+  `direction: rtl` on .cm-scroller (that is what positions a scrollbar) +
+  `flex-direction: row-reverse` (else rtl flips the line-number gutter to the
+  right) + `direction: ltr` back on .cm-gutters/.cm-content. A 3-way middle
+  pane sits between two gutters and can't win either way -> hides its bar
+  (still wheel/key/sync scrollable). NOTE this is a DIFFERENCE from Meld, not
+  a fix: Meld gives every pane a right-hand bar, but GTK draws thin
+  auto-hiding overlay scrollbars so nothing interrupts the curves. Textual
+  cannot do this: scrollbar_visibility is only visible/hidden and
+  _arrange_scrollbars hardcodes region.split_vertical(width - size).
+  Ctrl-C: one press now suffices. `async for msg in ws` never returns while a
+  browser holds the socket, so AppRunner.cleanup() waited out its 60s shutdown
+  timeout; run_session installs loop.add_signal_handler(SIGINT/SIGTERM ->
+  session.interrupt()), tracks live sockets and closes them before cleanup,
+  and TCPSite gets shutdown_timeout=1.0. exit_status() returns 130 when
+  interrupted (128+SIGINT, so `git mergetool` sees a failure even if the
+  merge was saved). Measured: 15s+ -> 0.10s. 159 tests green.
 - Still open (bmeld): conflict 3-way FROM the VC view (spec ready,
   untested in browser), tier-3 relay transport, Playwright job in CI,
   favicon, dark theme toggle (palette plumbing exists), folder copy/

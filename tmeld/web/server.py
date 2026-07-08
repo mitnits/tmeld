@@ -17,6 +17,7 @@ import itertools
 import json
 import logging
 import os
+import signal
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Union
 
@@ -104,13 +105,35 @@ class BmeldSession:
             if isinstance(comparison, Comparison) and comparison.num_panes == 3:
                 self.merge_saved[tab_id] = False
         self.closed = asyncio.Event()
+        self.interrupted = False
         self._connections = 0
         self._grace_task: Optional[asyncio.Task] = None
+        self._websockets: "set[web.WebSocketResponse]" = set()
 
     # --- lifecycle ---------------------------------------------------------
 
     def exit_status(self) -> int:
+        if self.interrupted:
+            return 130  # 128 + SIGINT, so `git mergetool` sees a failure
         return 0 if all(self.merge_saved.values()) else 1
+
+    def interrupt(self) -> None:
+        """Ctrl-C / SIGTERM: stop now, don't wait on the browser."""
+        self.interrupted = True
+        self.closed.set()
+
+    async def close_websockets(self) -> None:
+        """Close live sockets so `AppRunner.cleanup()` doesn't block on them.
+
+        `handle_ws` sits in `async for msg in ws`, which only returns when the
+        peer goes away -- setting `closed` alone would leave the handler (and
+        therefore shutdown) waiting for the socket's timeout.
+        """
+        if self._grace_task is not None:
+            self._grace_task.cancel()
+            self._grace_task = None
+        for ws in list(self._websockets):
+            await ws.close(code=1001, message=b"bmeld exiting")
 
     def _client_connected(self) -> None:
         self._connections += 1
@@ -188,6 +211,7 @@ class BmeldSession:
 
     async def handle_ws(self, ws: web.WebSocketResponse) -> None:
         self._client_connected()
+        self._websockets.add(ws)
         try:
             async for payload in self._initial_messages():
                 await ws.send_json(payload)
@@ -205,6 +229,7 @@ class BmeldSession:
                 if self.closed.is_set():
                     break
         finally:
+            self._websockets.discard(ws)
             self._client_disconnected()
 
     async def _dispatch(self, data: dict) -> Optional[dict]:
@@ -367,15 +392,34 @@ async def run_session(
     app = make_app(session, token)
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, "127.0.0.1", port)
+    # Don't let a wedged socket hold the process: one Ctrl-C must be enough.
+    site = web.TCPSite(runner, "127.0.0.1", port, shutdown_timeout=1.0)
     await site.start()
     actual_port = runner.addresses[0][1]
     url = f"http://127.0.0.1:{actual_port}/t/{token}"
     if on_url is not None:
         on_url(url)
+
+    loop = asyncio.get_running_loop()
+    installed = []
+    for signame in ("SIGINT", "SIGTERM"):
+        sig = getattr(signal, signame, None)
+        if sig is None:
+            continue
+        try:
+            loop.add_signal_handler(sig, session.interrupt)
+            installed.append(sig)
+        except NotImplementedError:  # Windows proactor loop
+            pass
     try:
         await session.closed.wait()
+    except asyncio.CancelledError:
+        session.interrupt()
+        raise
     finally:
+        for sig in installed:
+            loop.remove_signal_handler(sig)
+        await session.close_websockets()
         await runner.cleanup()
     return session.exit_status()
 
