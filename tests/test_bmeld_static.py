@@ -131,3 +131,54 @@ def test_every_bm_class_applied_by_the_client_is_styled():
         return True
     unstyled = sorted(c for c in applied - css if is_class(c))
     assert not unstyled, f"classes set by main.js with no CSS rule: {unstyled}"
+
+
+def test_no_focus_ring_on_panes():
+    """Meld draws none, and a 2px outline cuts across the chunk fills."""
+    css = _css_selectors_stripped_of_comments()
+    rule = re.search(r"\.cm-editor\.cm-focused\s*\{([^}]*)\}", css)
+    assert rule, ".cm-editor.cm-focused rule missing"
+    assert "outline: none" in rule.group(1), rule.group(1)
+
+
+def test_current_line_tint_never_wins_over_a_chunk_fill():
+    """The cursor line must not wipe the chunk background (as in the TUI).
+
+    Both active-line rules sit at specificity (0,2,0) and must be declared
+    before the chunk fills, which are also (0,2,0) and therefore win by order.
+    CodeMirror's own `.cm-activeLine` is (0,1,0), so the neutralising rule has
+    to be at least (0,2,0) to beat it in unfocused panes.
+    """
+    css = _css_selectors_stripped_of_comments()
+    neutral = css.index(".cm-editor .cm-activeLine")
+    tint = css.index(".cm-focused .cm-activeLine")
+    fills = css.index(".cm-line.bm-insert, .cm-line.bm-delete")
+    assert neutral < tint < fills, (
+        "active-line rules must precede the chunk fills, and the neutralising "
+        "rule must precede the tint"
+    )
+
+
+def test_palette_colours_are_all_consumed_by_the_client():
+    """current_line_bg and selection_bg were sent but ignored for two releases."""
+    from tmeld.palette import THEMES
+    from tmeld.web.protocol import palette_payload
+
+    payload = palette_payload(THEMES["meld-base"])
+    scalars = [k for k in payload if k not in ("chunk", "name", "dark")]
+    unused = [k for k in scalars if k not in MAIN_JS]
+    assert not unused, f"palette fields the client never reads: {unused}"
+
+
+def test_arrows_sit_on_the_connectors_flat_strips():
+    """Meld puts the arrows in their own gutters, flush against each pane.
+
+    The connector runs flat under those strips, so the chunk fill reaches the
+    pane edge and the buttons never overlap a curve.
+    """
+    assert "const ARROW_STRIP" in MAIN_JS
+    assert "const GUTTER_W" in MAIN_JS
+    # flat run out to the strip, bezier only across the middle
+    assert re.search(r"M -0\.5 \$\{f0\} L \$\{a\} \$\{f0\}", MAIN_JS), \
+        "connector must start with a flat run to the arrow strip"
+    assert "W - ARROW_STRIP" in MAIN_JS, "right arrow must snap to its strip"

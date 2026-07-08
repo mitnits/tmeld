@@ -11,7 +11,7 @@
 // (tree; Enter/double-click opens a FileTab via the server).
 
 import {
-  EditorView, lineNumbers, keymap, Decoration,
+  EditorView, lineNumbers, keymap, Decoration, highlightActiveLine,
 } from "@codemirror/view";
 import {
   EditorState, StateField, StateEffect, Prec, Compartment,
@@ -26,6 +26,14 @@ const REDIFF_DEBOUNCE = 250;
 // box-shadow in bmeld.css: the connector's degenerate band has to land on
 // exactly the rows the pane paints.
 const MARK_PX = 2;
+// Meld splits the space between panes into ActionGutter | linkmap | ActionGutter
+// (four gutters, two linkmaps in filediff.ui). The arrows live in the outer
+// strips, flush against each pane, so a button never sits on a curve. We keep
+// one element, but the connector's bezier is confined to the middle and the
+// shape runs flat under the strips -- otherwise the fill would stop short of
+// the pane and reopen the seam at the junction.
+const GUTTER_W = 56;
+const ARROW_STRIP = 14;
 const CHUNK_TAGS = ["insert", "delete", "replace", "conflict", "error"];
 
 // meld/vc/_vc.py state constants -> CSS class suffixes (PARITY.md §2)
@@ -55,6 +63,13 @@ function bell() {
   el.classList.remove("bm-bell");
   void el.offsetWidth;
   el.classList.add("bm-bell");
+}
+
+/** Meld's PathLabel keeps the tail: `.../project-a/src/engine.py`. */
+function shortenPath(path, keep = 3) {
+  const parts = String(path).split("/").filter(Boolean);
+  if (parts.length <= keep) return path;
+  return ".../" + parts.slice(-keep).join("/");
 }
 
 function setStatus(text) {
@@ -173,10 +188,10 @@ class FileTab {
     grid.className = "bm-filegrid";
     const cols = [];
     for (let i = 0; i < this.numPanes; i++) {
-      if (i) cols.push("38px");
+      if (i) cols.push(`${GUTTER_W}px`);
       cols.push("1fr");
     }
-    cols.push("22px");
+    cols.push(`${22 * this.numPanes}px`);   // one overview strip per pane
     grid.style.gridTemplateColumns = cols.join(" ");
 
     for (let i = 0; i < this.numPanes; i++) {
@@ -190,17 +205,23 @@ class FileTab {
       }
       grid.appendChild(this.makePane(i, data));
     }
-    const cm = document.createElement("div");
-    cm.className = "bm-chunkmap";
-    const svg = document.createElementNS(svgNS, "svg");
-    cm.appendChild(svg);
-    cm.addEventListener("click", (e) => {
-      const mid = Math.min(1, this.numPanes - 1);
-      const total = this.totalLines(mid);
-      this.goToLine(mid, Math.floor((e.offsetY / cm.clientHeight) * total));
-    });
-    grid.appendChild(cm);
-    this.chunkmap = { el: cm, svg };
+    // Meld shows one TextViewChunkMap per pane (chunkmap0..2), side by side.
+    const maps = document.createElement("div");
+    maps.className = "bm-chunkmaps";
+    this.chunkmaps = [];
+    for (let i = 0; i < this.numPanes; i++) {
+      const cm = document.createElement("div");
+      cm.className = "bm-chunkmap";
+      const svg = document.createElementNS(svgNS, "svg");
+      cm.appendChild(svg);
+      cm.addEventListener("click", (e) => {
+        const total = this.totalLines(i);
+        this.goToLine(i, Math.floor((e.offsetY / cm.clientHeight) * total));
+      });
+      maps.appendChild(cm);
+      this.chunkmaps.push({ el: cm, svg });
+    }
+    grid.appendChild(maps);
     this.container.appendChild(grid);
   }
 
@@ -215,12 +236,13 @@ class FileTab {
     title.className = "bm-title";
     const label = document.createElement("span");
     label.className = "bm-label";
-    label.textContent = data.labels[i];
+    label.textContent = shortenPath(data.labels[i]);
     label.title = data.paths[i];
     const save = document.createElement("button");
     save.textContent = "Save";
     save.className = "bm-save";
-    save.style.visibility = "hidden";
+    save.disabled = true;               // Meld keeps it visible, insensitive
+    save.title = "Save this pane";
     save.addEventListener("click", () => this.savePane(i));
     let lock = null;
     if (this.readonly.has(i)) {
@@ -242,6 +264,7 @@ class FileTab {
     const editable = new Compartment();
     const extensions = [
       ...(session.lineNumbers ? [lineNumbers()] : []),
+      highlightActiveLine(),
       history(),
       renderField,
       Prec.high(keymap.of(meldKeymap())),
@@ -412,11 +435,14 @@ class FileTab {
       const emphasis = this.emph[k] === index;
       const path = document.createElementNS(svgNS, "path");
       const m = W / 2;
+      const a = ARROW_STRIP;          // flat run against the left pane
+      const b = W - ARROW_STRIP;      // ...and against the right pane
       path.setAttribute("d",
-        `M -0.5 ${f0}` +
-        ` C ${m} ${f0} ${m} ${t0} ${W + 0.5} ${t0}` +
-        ` L ${W + 0.5} ${t1}` +
-        ` C ${m} ${t1} ${m} ${f1} -0.5 ${f1} Z`);
+        `M -0.5 ${f0} L ${a} ${f0}` +
+        ` C ${m} ${f0} ${m} ${t0} ${b} ${t0}` +
+        ` L ${W + 0.5} ${t0} L ${W + 0.5} ${t1} L ${b} ${t1}` +
+        ` C ${m} ${t1} ${m} ${f1} ${a} ${f1}` +
+        ` L -0.5 ${f1} Z`);
       path.setAttribute("fill",
         `var(--bm-${tag}-${emphasis ? "emph" : "fill"})`);
       path.setAttribute("stroke", `var(--bm-${tag}-line)`);
@@ -426,11 +452,11 @@ class FileTab {
       // One button per direction, unless the source side has no lines.
       if (sa !== ea) {
         const act = this.chunkAction(k, true);
-        if (act) el.appendChild(this.makeArrow(act, "▶", tag, 1, f0, index, k, true));
+        if (act) el.appendChild(this.makeArrow(act, "▶", tag, 0, f0, index, k, true));
       }
       if (sb !== eb) {
         const act = this.chunkAction(k, false);
-        if (act) el.appendChild(this.makeArrow(act, "◀", tag, W - 15, t0, index, k, false));
+        if (act) el.appendChild(this.makeArrow(act, "◀", tag, W - ARROW_STRIP, t0, index, k, false));
       }
     });
   }
@@ -492,31 +518,32 @@ class FileTab {
   }
 
   renderChunkmap() {
-    const { el, svg } = this.chunkmap;
-    const mid = Math.min(1, this.numPanes - 1);
-    const H = el.clientHeight;
-    const W = el.clientWidth;
-    if (!W || !H) return;
-    const total = Math.max(this.totalLines(mid), 1);
-    while (svg.firstChild) svg.removeChild(svg.firstChild);
-    for (const [tag, s, e] of this.panes[mid].chunks) {
-      const r = document.createElementNS(svgNS, "rect");
-      r.setAttribute("x", 2);
-      r.setAttribute("width", W - 4);
-      r.setAttribute("y", (s / total) * H);
-      r.setAttribute("height",
-        Math.max(((Math.max(e, s + 1) - s) / total) * H, 2));
-      r.setAttribute("fill", `var(--bm-${tag}-line)`);
-      svg.appendChild(r);
-    }
-    const lens = document.createElementNS(svgNS, "rect");
-    lens.setAttribute("x", 0);
-    lens.setAttribute("width", W);
-    lens.setAttribute("y", (this.scrollLinesOf(mid) / total) * H);
-    lens.setAttribute("height",
-      Math.max((this.pageLines(mid) / total) * H, 4));
-    lens.setAttribute("class", "bm-lens");
-    svg.appendChild(lens);
+    this.chunkmaps.forEach(({ el, svg }, i) => {
+      const H = el.clientHeight;
+      const W = el.clientWidth;
+      if (!W || !H) return;
+      const total = Math.max(this.totalLines(i), 1);
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+      for (const [tag, s, e] of this.panes[i].chunks) {
+        const r = document.createElementNS(svgNS, "rect");
+        r.setAttribute("x", 2);
+        r.setAttribute("width", W - 4);
+        r.setAttribute("y", (s / total) * H);
+        // a single-line chunk in a huge file must still be visible
+        r.setAttribute("height",
+          Math.max(((Math.max(e, s + 1) - s) / total) * H, 2));
+        r.setAttribute("fill", `var(--bm-${tag}-line)`);
+        svg.appendChild(r);
+      }
+      const lens = document.createElementNS(svgNS, "rect");
+      lens.setAttribute("x", 0);
+      lens.setAttribute("width", W);
+      lens.setAttribute("y", (this.scrollLinesOf(i) / total) * H);
+      lens.setAttribute("height",
+        Math.max((this.pageLines(i) / total) * H, 4));
+      lens.setAttribute("class", "bm-lens");
+      svg.appendChild(lens);
+    });
   }
 
   // --- scrolling ---------------------------------------------------------------------
@@ -745,7 +772,7 @@ class FileTab {
   markDirty(i, dirty) {
     this.panes[i].dirty = dirty;
     this.panes[i].titleEl.classList.toggle("bm-dirty", dirty);
-    this.panes[i].saveBtn.style.visibility = dirty ? "visible" : "hidden";
+    this.panes[i].saveBtn.disabled = !dirty;
     tabBar.refreshLabel(this);
   }
 
@@ -1063,6 +1090,8 @@ ws.onmessage = (event) => {
     root.setProperty("--bm-inline-bg", pal.inline_bg);
     root.setProperty("--bm-overlay", pal.overlay_color);
     root.setProperty("--bm-overlay-alpha", pal.overlay_alpha);
+    root.setProperty("--bm-current-line", pal.current_line_bg);
+    root.setProperty("--bm-selection", pal.selection_bg);
     for (const tag of CHUNK_TAGS) {
       const c = pal.chunk[tag];
       if (!c) continue;

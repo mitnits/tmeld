@@ -358,6 +358,32 @@ working context that isn't in either.
   where CM has no line to attach to so `.bm-mark-end` hangs off the last one);
   tmeld connectors_for_chunks() centres the degenerate band half a marker
   below the boundary. MARK_PX/INSERT_MARKER_PX must stay in sync with the CSS.
+- Browser chrome pass (user, 2026-07-08, comparing against real Meld):
+  * REMOVED the CM focus ring (.cm-editor.cm-focused outline) — the "thin
+    border around the clicked pane" the user disliked; Meld has none. It also
+    explains stray (215,230,250) pixels in earlier probes.
+  * Current-line tint + selection: the server had been sending current_line_bg
+    (#ffffbf) and selection_bg (#3584e4) since B0 and the client used NEITHER.
+    Now highlightActiveLine() + CSS vars. GOTCHA (specificity): CodeMirror
+    ships `.cm-activeLine {background:#cceeff44}` at (0,1,0), so `.cm-editor
+    .cm-activeLine{transparent}` (0,2,0) neutralises it for unfocused panes,
+    then `.cm-focused .cm-activeLine` (0,2,0) tints the focused one, and BOTH
+    are declared BEFORE the chunk fills (also (0,2,0)) so a chunk background
+    always wins over the cursor line — same rule the TUI settled on.
+  * Gutter is now Meld's grey channel (color-mix over page_bg), panes white.
+  * Pane header: Save always visible, disabled when clean (Meld's
+    file_save_button has no visible=False); path ellipsized at the START
+    (`.../project-a/src/engine.py`, Meld's PathLabel) with full path in title.
+  * Arrows flush to the panes: upstream filediff.ui has FOUR ActionGutters and
+    TWO linkmaps — arrows live in their own strips, curves between them. bmeld
+    keeps one 56px gutter but the connector runs FLAT for ARROW_STRIP=14px at
+    each end before the bezier, so the chunk fill still reaches the pane edge
+    (a plain inset would have reopened the junction seam). Junction coverage
+    measured 2.0px exactly (was 2.03 with the AA descent).
+  * One chunkmap PER PANE (Meld: chunkmap0..2 in chunkmap_hbox), each with its
+    own lens and click-to-jump.
+  Not gaps: Meld renders the text black (no syntax colouring), and has no
+  GtkPaned (panes are not user-resizable there either).
 - Still open (bmeld): conflict 3-way FROM the VC view (spec ready,
   untested in browser), tier-3 relay transport, Playwright job in CI,
   favicon, dark theme toggle (palette plumbing exists), folder copy/

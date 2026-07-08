@@ -182,7 +182,8 @@ body {
   background: #f6f6f6;
   cursor: pointer;
 }
-.bm-save:hover { background: #ececec; }
+.bm-save:hover:not(:disabled) { background: #ececec; }
+.bm-save:disabled { opacity: 0.4; cursor: default; }
 .bm-editor { flex: 1; min-height: 0; }
 .bm-editor .cm-editor { height: 100%; background: var(--bm-page-bg); }
 .bm-editor .cm-scroller {
@@ -195,7 +196,26 @@ body {
   color: var(--bm-unknown-fg);
   border-right: 1px solid #eee;
 }
-.cm-editor.cm-focused { outline: 2px solid #3584e433; outline-offset: -2px; }
+/* No focus ring: Meld draws none, and a 2px outline on the focused pane cuts
+   across the chunk fills where the connectors attach. The current-line tint
+   below shows which pane has the cursor. */
+.cm-editor.cm-focused { outline: none; }
+
+/* Meld's highlight-current-line (#ffffbf), and only in the pane holding the
+   cursor -- which is also how you tell which pane is focused, now that there
+   is no focus ring.
+
+   Specificity matters: this is (0,2,0), the same as `.cm-line.bm-insert`, and
+   the chunk-fill rules are declared *after* it, so a chunk background always
+   wins over the cursor-line tint. The TUI settled the same way (see the
+   cursor-line wipe in pane._set_theme). Do not raise this to (0,3,0). */
+/* CodeMirror ships its own pale-blue .cm-activeLine (#cceeff44) at (0,1,0);
+   kill it at (0,2,0) so unfocused panes stay clean, then tint the focused one
+   at the same specificity (later rule wins). Both stay at (0,2,0) so the chunk
+   fills below still win. */
+.cm-editor .cm-activeLine { background: transparent; }
+.cm-focused .cm-activeLine { background: var(--bm-current-line); }
+.bm-editor ::selection { background: var(--bm-selection); color: #fff; }
 
 /* --- chunk styling (fills = pale backgrounds, borders = line colors) ---- */
 
@@ -231,7 +251,13 @@ body {
 
 /* --- gutters (connectors + push arrows) --------------------------------- */
 
-.bm-gutter { position: relative; background: var(--bm-page-bg); }
+/* Meld's linkmap sits on the window background, not the page: the curve
+   channel reads as its own surface between two white panes. */
+.bm-gutter {
+  position: relative;
+  background: #f6f5f4;
+  background: color-mix(in srgb, var(--bm-page-bg) 94%, var(--bm-text-fg));
+}
 .bm-gutter svg {
   position: absolute;
   inset: 0;
@@ -256,7 +282,16 @@ body {
 
 /* --- chunkmap ------------------------------------------------------------ */
 
-.bm-chunkmap { position: relative; cursor: pointer; background: var(--bm-page-bg); }
+/* One overview strip per pane, side by side (Meld's chunkmap_hbox). */
+.bm-chunkmaps { display: flex; min-height: 0; }
+.bm-chunkmap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  background: var(--bm-page-bg);
+  border-left: 1px solid #eee;
+}
 .bm-chunkmap svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .bm-lens { fill: var(--bm-overlay); fill-opacity: var(--bm-overlay-alpha); }
 
