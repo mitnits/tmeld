@@ -106,6 +106,7 @@ class FileTab {
     this.label = data.label;
     this.numPanes = data.num_panes;
     this.paths = data.paths;
+    this.readonly = new Set(data.readonly || []);
     this.container = container;
     this.panes = [];
     this.gutters = [];
@@ -166,6 +167,7 @@ class FileTab {
     const title = document.createElement("div");
     title.className = "bm-title";
     const label = document.createElement("span");
+    label.className = "bm-label";
     label.textContent = data.labels[i];
     label.title = data.paths[i];
     const save = document.createElement("button");
@@ -173,6 +175,17 @@ class FileTab {
     save.className = "bm-save";
     save.style.visibility = "hidden";
     save.addEventListener("click", () => this.savePane(i));
+    if (this.readonly.has(i)) {
+      // Meld shows a lock in each pane's action bar when the file is not
+      // writable (changes-prevent-symbolic). Ours is indicative only: Meld's
+      // is a toggle that unlocks the buffer for a save-as, which we have no
+      // UI for yet.
+      const lock = document.createElement("span");
+      lock.className = "bm-lock";
+      lock.textContent = "🔒";
+      lock.title = "This file can not be written to.";
+      title.appendChild(lock);
+    }
     title.appendChild(label);
     title.appendChild(save);
 
@@ -331,13 +344,14 @@ class FileTab {
       path.setAttribute("stroke-width", "1");
       svg.appendChild(path);
 
+      // One button per direction, unless the source side has no lines.
       if (sa !== ea) {
-        el.appendChild(this.makeArrow("▶", tag, 1, f0, () =>
-          this.pushPair(k, true, index)));
+        const act = this.chunkAction(k, true);
+        if (act) el.appendChild(this.makeArrow(act, "▶", tag, 1, f0, index, k, true));
       }
       if (sb !== eb) {
-        el.appendChild(this.makeArrow("◀", tag, W - 15, t0, () =>
-          this.pushPair(k, false, index)));
+        const act = this.chunkAction(k, false);
+        if (act) el.appendChild(this.makeArrow(act, "◀", tag, W - 15, t0, index, k, false));
       }
     });
   }
@@ -370,15 +384,21 @@ class FileTab {
     return [top + 0.5, bottom - 0.5];
   }
 
-  makeArrow(glyph, tag, x, y, onclick) {
+  makeArrow(action, arrow, tag, x, y, index, k, srcIsA) {
+    const del = action === "delete";
     const btn = document.createElement("button");
-    btn.className = "bm-arrow";
-    btn.textContent = glyph;
+    btn.className = del ? "bm-arrow bm-arrow-delete" : "bm-arrow";
+    btn.textContent = del ? "✕" : arrow;
+    btn.title = del
+      ? "Delete this change (the other file is read-only)"
+      : "Copy this change to the other file";
     btn.style.left = `${x}px`;
     btn.style.top = `${Math.max(0, y)}px`;
     btn.style.color = `var(--bm-${tag}-fg)`;
     btn.addEventListener("mousedown", (e) => e.preventDefault());
-    btn.addEventListener("click", onclick);
+    btn.addEventListener("click", () => del
+      ? this.deletePair(k, srcIsA, index)
+      : this.pushPair(k, srcIsA, index));
     return btn;
   }
 
@@ -465,6 +485,27 @@ class FileTab {
     return out;
   }
 
+  // Port of Meld's ActionGutter._classify_change_actions (actiongutter.py).
+  // `srcIsA` picks the direction: source is the pane we'd copy *from*.
+  // A chunk with no lines on the source side ("insert") gets no button at
+  // all; callers already gate on that, matching Meld.
+  chunkAction(k, srcIsA) {
+    const src = srcIsA ? k : k + 1;
+    const dst = srcIsA ? k + 1 : k;
+    if (this.readonly.has(src) && this.readonly.has(dst)) return null;
+    // Can't copy into a read-only pane -- offer to delete the chunk from the
+    // source instead, which is the only way to make the two sides agree.
+    if (this.readonly.has(dst)) return "delete";
+    return "replace";
+  }
+
+  // EditorState.readOnly only stops *user* input; a programmatic dispatch
+  // would still write. Every chunk action goes through here.
+  editPane(i, start, end, newLines) {
+    if (this.readonly.has(i)) return bell();
+    this.replaceLines(this.panes[i].view, start, end, newLines);
+  }
+
   replaceLines(view, start, end, newLines) {
     const doc = view.state.doc;
     let from, to, insert;
@@ -490,12 +531,19 @@ class FileTab {
     if (!chunk) return bell();
     const [, sa, ea, sb, eb] = chunk;
     if (srcIsA) {
-      this.replaceLines(this.panes[k + 1].view, sb, eb,
-        this.getLines(k, sa, ea));
+      this.editPane(k + 1, sb, eb, this.getLines(k, sa, ea));
     } else {
-      this.replaceLines(this.panes[k].view, sa, ea,
-        this.getLines(k + 1, sb, eb));
+      this.editPane(k, sa, ea, this.getLines(k + 1, sb, eb));
     }
+  }
+
+  /** Delete the chunk from the source side of a pane pair (the ✕ button). */
+  deletePair(k, srcIsA, index) {
+    const chunk = this.pairs[k] && this.pairs[k][index];
+    if (!chunk) return bell();
+    const [, sa, ea, sb, eb] = chunk;
+    if (srcIsA) this.editPane(k, sa, ea, []);
+    else this.editPane(k + 1, sb, eb, []);
   }
 
   cursorRow(pane) {
@@ -549,7 +597,7 @@ class FileTab {
     const chunk = this.panes[pane].chunks.find(
       ([, s, e]) => row >= s && row < e);
     if (!chunk || chunk[1] === chunk[2]) return bell();
-    this.replaceLines(this.panes[pane].view, chunk[1], chunk[2], []);
+    this.editPane(pane, chunk[1], chunk[2], []);
   }
 
   navChunk(delta) {

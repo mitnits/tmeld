@@ -42,6 +42,7 @@ PANE_BORDER_ROWS = 1
 GRAPHIC_IMAGE_COLS = 4
 
 PushCallback = Callable[[int, int, int], None]  # (src, dst, chunk_index)
+DeleteCallback = Callable[[int, int], None]  # (src, chunk_index)
 
 
 class ActionGutter(GraphicsOverlay, Widget):
@@ -52,11 +53,18 @@ class ActionGutter(GraphicsOverlay, Widget):
     """
 
     ARROWS = ("▶", "◀")
+    DELETE = "✕"
     BORDER = "│"
 
     def __init__(self, theme_def: Theme, **kwargs) -> None:
         super().__init__(**kwargs)
         self.theme_def = theme_def
+        # App pane indices that can't be written to. Drives the same rule as
+        # Meld's ActionGutter._classify_change_actions: you can copy *out* of
+        # a read-only pane, but never into one -- there, the only offer is to
+        # delete the chunk from the source side, so the two sides agree.
+        self.readonly: frozenset = frozenset()
+        self.on_delete: Optional[DeleteCallback] = None
         # The adjacent DiffPanes this gutter sits between, and their app
         # pane indices — both set by the app after compose. Clicks push
         # between exactly this pair.
@@ -85,6 +93,20 @@ class ActionGutter(GraphicsOverlay, Widget):
         pane = self.panes[pane_index]
         return y + int(pane.scroll_offset.y) - PANE_BORDER_ROWS
 
+    def _action(self, col: int) -> Optional[str]:
+        """"replace", "delete" or None for this column's button.
+
+        Port of Meld's ActionGutter._classify_change_actions. Column 0 copies
+        left->right, column 1 right->left; `_starts` already omits chunks with
+        no lines on the source side, which is Meld's "insert" case.
+        """
+        src, dst = self.pane_pair[col], self.pane_pair[1 - col]
+        if src in self.readonly and dst in self.readonly:
+            return None
+        if dst in self.readonly:
+            return "delete"
+        return "replace"
+
     def render_line(self, y: int) -> Strip:
         page = Style(bgcolor=self.theme_def.page_bg)
         if len(self.panes) != 2:
@@ -101,12 +123,14 @@ class ActionGutter(GraphicsOverlay, Widget):
         segments = []
         for col in (0, 1):
             entry = self._starts[col].get(doc_line[col])
-            if entry is not None:
+            action = self._action(col) if entry is not None else None
+            if action is not None:
                 _index, tag = entry
                 chunk_style = self.theme_def.chunk.get(tag)
                 fg = chunk_style.fg if chunk_style else None
+                glyph = self.DELETE if action == "delete" else self.ARROWS[col]
                 seg = Segment(
-                    self.ARROWS[col],
+                    glyph,
                     Style(color=fg, bgcolor=self.theme_def.page_bg, bold=True),
                 )
             elif in_pane[col] and self.graphics == "none":
@@ -124,10 +148,14 @@ class ActionGutter(GraphicsOverlay, Widget):
             return
         col = 0 if event.x == 0 else 1
         entry = self._starts[col].get(self._doc_line(col, event.y))
-        if entry is None or self.on_push is None:
+        if entry is None:
             return
         index, _tag = entry
-        self.on_push(self.pane_pair[col], self.pane_pair[1 - col], index)
+        action = self._action(col)
+        if action == "replace" and self.on_push is not None:
+            self.on_push(self.pane_pair[col], self.pane_pair[1 - col], index)
+        elif action == "delete" and self.on_delete is not None:
+            self.on_delete(self.pane_pair[col], index)
 
     # --- Tier 2 pixel-linkmap overlay ----------------------------------------
 

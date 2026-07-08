@@ -128,6 +128,8 @@ class FileDiffView(ComparisonView):
             gutter.panes = [self.panes[k], self.panes[k + 1]]
             gutter.pane_pair = (k, k + 1)
             gutter.on_push = self._push_chunk
+            gutter.on_delete = self._delete_chunk
+            gutter.readonly = frozenset(self.readonly)
             gutter.pair_changes = (
                 lambda k=k: self.comparison.pair_chunks(k, k + 1)
             )
@@ -148,6 +150,9 @@ class FileDiffView(ComparisonView):
 
     def _pane_title(self, i: int) -> str:
         path = self._display_name(i).replace("[", r"\[")
+        if i in self.readonly:
+            # Meld shows changes-prevent-symbolic when a file isn't writable.
+            return f"🔒 {path}"
         if self.dirty[i]:
             return f"{path} [b]*[/b] [reverse b] Save [/reverse b]"
         return path
@@ -403,6 +408,21 @@ class FileDiffView(ComparisonView):
 
     def action_copy_down_right(self) -> None:
         self._copy_action(PANE_RIGHT, up=False)
+
+    def _delete_chunk(self, src: int, index: int) -> None:
+        """Delete chunk `index` from pane `src` (the gutter's ✕ button).
+
+        Offered in place of a push arrow when the pane on the other side is
+        read-only, so the change can still be resolved.
+        """
+        if src in self.readonly:
+            self.app.bell()
+            return
+        chunk = self.comparison.differ.get_chunk(index, src)
+        if chunk is None or chunk.start_a == chunk.end_a:
+            self.app.bell()
+            return
+        self._replace_lines(self.panes[src], chunk.start_a, chunk.end_a, [])
 
     def action_delete_chunk(self) -> None:
         pane = self._focused_pane()

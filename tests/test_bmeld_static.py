@@ -101,3 +101,22 @@ def test_no_scrollbar_sits_against_a_linkmap_gutter():
     # ...and the text itself must stay left-to-right
     assert re.search(r"\.bm-pane-first \.cm-content\s*\{[^}]*direction: ltr", css)
     assert re.search(r"\.bm-pane-mid \.cm-scroller\s*\{[^}]*scrollbar-width: none", css)
+
+
+def test_every_bm_class_applied_by_the_client_is_styled():
+    """The reverse of the above: a class the client sets but nothing styles.
+
+    `.bm-readonly` was applied to read-only pane titles for two releases with
+    no rule anywhere, so the state was invisible.
+    """
+    css = set(re.findall(r"\.(bm-[\w-]+)", _css_selectors_stripped_of_comments()))
+    applied = set(re.findall(r"bm-[\w-]+", MAIN_JS))
+    raw = _css_selectors_stripped_of_comments()
+    def is_class(name: str) -> bool:
+        if name.endswith("-"):
+            return False              # `bm-st-` etc: interpolation prefix
+        if f"--{name}" in raw or f"--{name}" in MAIN_JS:
+            return False              # a CSS custom property, not a class
+        return True
+    unstyled = sorted(c for c in applied - css if is_class(c))
+    assert not unstyled, f"classes set by main.js with no CSS rule: {unstyled}"

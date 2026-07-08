@@ -157,8 +157,11 @@ body {
   white-space: nowrap;
   overflow: hidden;
 }
-.bm-title span { overflow: hidden; text-overflow: ellipsis; }
-.bm-title.bm-dirty span::after { content: " •"; color: #c33; }
+.bm-title .bm-label { overflow: hidden; text-overflow: ellipsis; }
+.bm-title.bm-dirty .bm-label::after { content: " •"; color: #c33; }
+/* Meld's changes-prevent-symbolic: the file can not be written to. */
+.bm-lock { flex: none; font-size: 11px; line-height: 1; cursor: help; }
+.bm-title.bm-readonly .bm-label { color: var(--bm-unknown-fg); }
 .bm-save {
   margin-left: auto;
   font-size: 11px;
@@ -227,6 +230,8 @@ body {
   font-weight: bold;
 }
 .bm-arrow:hover { transform: scale(1.3); }
+/* Target pane is read-only: the only action is to drop the change. */
+.bm-arrow-delete { font-size: 11px; }
 
 /* --- chunkmap ------------------------------------------------------------ */
 
