@@ -75,6 +75,7 @@ class FileDiffView(ComparisonView):
         self.tab_title = tab_title
         self.panes: List[DiffPane] = []
         self.gutters: List[ActionGutter] = []
+        self.chunkmaps: List[ChunkMap] = []
         self.current_chunk = None  # merge-cache index of chunk at cursor
         self.dirty = [False] * self.num_panes
         self.merged_saved = False  # 3-way: middle pane saved at least once
@@ -130,11 +131,16 @@ class FileDiffView(ComparisonView):
             ActionGutter(self.theme_def, id=f"gutter{k}")
             for k in range(self.num_panes - 1)
         ]
+        self.chunkmaps = [
+            ChunkMap(self.theme_def, id=f"chunkmap{i}")
+            for i in range(self.num_panes)
+        ]
         for i, pane in enumerate(self.panes):
             if i:
                 yield self.gutters[i - 1]
             yield pane
-        yield ChunkMap(self.theme_def, id="chunkmap")
+        # Meld puts one overview strip per pane, side by side (chunkmap0..2).
+        yield from self.chunkmaps
 
     def on_mount(self) -> None:
         for k, gutter in enumerate(self.gutters):
@@ -149,9 +155,18 @@ class FileDiffView(ComparisonView):
             gutter.current_chunk_starts = (
                 lambda k=k: self._current_chunk_starts(k)
             )
-        chunkmap = self.query_one(ChunkMap)
-        chunkmap.on_jump = self._jump_to_line
-        chunkmap.pane = self.panes[1]
+        for i, chunkmap in enumerate(self.chunkmaps):
+            chunkmap.pane = self.panes[i]
+            chunkmap.on_jump = (
+                lambda line, i=i: self._jump_to_line(i, line)
+            )
+        # Keep scrollbars away from the linkmaps: the first pane's goes to the
+        # far left, a 3-way middle pane (sandwiched between two gutters) hides
+        # its own -- it stays sync-scrolled and reachable by wheel/keys/map.
+        self.panes[0].scrollbar_on_left = True
+        self.panes[0]._left_scrollbar_padding()
+        for pane in self.panes[1:-1]:
+            pane.styles.scrollbar_size_vertical = 0
         for i, pane in enumerate(self.panes):
             pane.load_text("\n".join(self.comparison.lines[i]))
             self.dirty[i] = False
@@ -186,11 +201,11 @@ class FileDiffView(ComparisonView):
         for k, gutter in enumerate(self.gutters):
             gutter.set_starts(comparison.action_starts(k))
             gutter.refresh_overlay()
-        mid_chunks = comparison.pane_chunks(1)
-        self.query_one(ChunkMap).set_chunks(
-            [(c.tag, c.start_a, c.end_a) for c in mid_chunks],
-            len(comparison.lines[1]),
-        )
+        for i, chunkmap in enumerate(self.chunkmaps):
+            chunkmap.set_chunks(
+                [(c.tag, c.start_a, c.end_a) for c in comparison.pane_chunks(i)],
+                len(comparison.lines[i]),
+            )
         count = comparison.differ.diff_count()
         conflicts = len(comparison.differ.conflicts)
         subtitle = "identical" if count == 0 else f"{count} changes"
@@ -486,9 +501,9 @@ class FileDiffView(ComparisonView):
         for gutter in self.gutters:
             gutter.refresh()
             gutter.refresh_overlay()
-        chunkmap = self.query_one(ChunkMap)
-        chunkmap.refresh()
-        chunkmap.refresh_overlay()
+        for chunkmap in self.chunkmaps:
+            chunkmap.refresh()
+            chunkmap.refresh_overlay()
         master = message.pane.pane_index
         master_pane = self.panes[master]
         page = master_pane.scrollable_content_region.height or 1
@@ -517,8 +532,8 @@ class FileDiffView(ComparisonView):
 
     # --- Navigation ---------------------------------------------------------
 
-    def _jump_to_line(self, line: int) -> None:
-        pane = self.panes[1]
+    def _jump_to_line(self, pane_index: int, line: int) -> None:
+        pane = self.panes[pane_index]
         page = pane.scrollable_content_region.height or 1
         pane.scroll_to(y=max(0, line - page // 2), animate=False)
 

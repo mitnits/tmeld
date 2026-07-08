@@ -12,6 +12,8 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from rich.style import Style
 from textual.binding import Binding
 from textual.message import Message
+from textual.geometry import Region, Spacing
+from textual.widget import Widget
 from textual.widgets import TextArea
 from textual.widgets.text_area import TextAreaTheme
 
@@ -51,6 +53,11 @@ def build_textarea_theme(theme_def: Theme) -> TextAreaTheme:
 class DiffPane(GraphicsOverlay, TextArea):
     """One comparison pane. Editable since Phase 3."""
 
+    # Leftmost pane: the scrollbar goes on the far left so it never lands
+    # between a chunk fill and the linkmap it connects to. A class attribute,
+    # because scrollbar_gutter is consulted from Widget.__init__.
+    scrollbar_on_left: bool = False
+
     BINDINGS = [
         # Meld's redo (TextArea ships ctrl+z/ctrl+y; Meld muscle memory
         # expects ctrl+shift+z as well)
@@ -88,6 +95,77 @@ class DiffPane(GraphicsOverlay, TextArea):
         # derived handler, so it must be chained explicitly.
         super().on_mount()
         self._init_graphics()
+        theme = self.theme_def
+        self.styles.scrollbar_size_vertical = 1
+        self.styles.scrollbar_size_horizontal = 1
+        self.styles.scrollbar_background = theme.gutter_bg
+        self.styles.scrollbar_background_hover = theme.gutter_bg
+        self.styles.scrollbar_background_active = theme.gutter_bg
+        self.styles.scrollbar_color = theme.unknown_fg
+        self.styles.scrollbar_color_hover = theme.text_fg
+        self.styles.scrollbar_color_active = theme.text_fg
+        self.styles.scrollbar_corner_color = theme.gutter_bg
+        self._left_scrollbar_padding()
+
+    # --- left-hand scrollbar ------------------------------------------------
+    #
+    # Textual hardcodes the vertical scrollbar to the right edge: both
+    # Widget.scrollbar_gutter (which reserves the space) and
+    # Widget._arrange_scrollbars (which places the widget) assume it. Mirror
+    # both, so the leftmost pane's bar sits against the window edge instead of
+    # against the linkmap.
+
+    @property
+    def scrollbar_gutter(self) -> Spacing:
+        """No vertical reserve when the bar is on the left.
+
+        Textual composites scrollbars over `content_region`, which is shaped by
+        `styles.gutter` (padding + border) and *not* by this. So a left-hand bar
+        cannot be made room for here -- it would simply paint over the first
+        column of text. `_left_scrollbar_padding()` shifts the content instead,
+        and this stops the space being reserved twice.
+        """
+        if not self.scrollbar_on_left:
+            return Widget.scrollbar_gutter.fget(self)
+        return Spacing(0, 0, self.scrollbar_size_horizontal, 0)
+
+    def _left_scrollbar_padding(self) -> None:
+        """Reserve the bar's column as padding, unconditionally.
+
+        `Widget.scrollbar_size_vertical` is 0 until the scrollbar is actually
+        shown, so sizing the padding from it would make the text jump sideways
+        the moment a file grows past one screen. Reserve it always, like CSS's
+        `scrollbar-gutter: stable`.
+        """
+        pad = self.styles.scrollbar_size_vertical if self.scrollbar_on_left else 0
+        self.styles.padding = (0, 0, 0, pad)
+
+    def _arrange_scrollbars(self, region: Region):
+        if not self.scrollbar_on_left:
+            yield from super()._arrange_scrollbars(region)
+            return
+
+        # `region` here is the *container* region: the compositor has already
+        # shrunk it by styles.gutter, so the padding column reserved by
+        # `_left_scrollbar_padding()` sits just outside it, at region.x - size.
+        show_vertical, show_horizontal = self.scrollbars_enabled
+        size_v = self.styles.scrollbar_size_vertical
+        size_h = self.scrollbar_size_horizontal if show_horizontal else 0
+
+        window, h_region = (
+            region.split_horizontal(-size_h) if size_h else (region, None)
+        )
+        if show_vertical and size_v:
+            bar = Region(region.x - size_v, region.y, size_v, window.height)
+            scrollbar = self.vertical_scrollbar
+            scrollbar.window_virtual_size = self.virtual_size.height
+            scrollbar.window_size = window.height
+            yield scrollbar, bar
+        if h_region:
+            scrollbar = self.horizontal_scrollbar
+            scrollbar.window_virtual_size = self.virtual_size.width
+            scrollbar.window_size = window.width
+            yield scrollbar, h_region
 
     def set_insert_markers(self, markers: Sequence[Tuple[int, str]]) -> None:
         if list(markers) != self._insert_markers:

@@ -408,6 +408,24 @@ working context that isn't in either.
   Gutter background is now Theme.gutter_bg = blend(page_bg, text_fg, 0.06) in
   BOTH modes (kitty composites over the cells, sixel bakes it in) — Meld's
   linkmap sits on the window background, not the page.
+- TUI round 10 (user, from a screenshot): the ChunkMap was a SINGLE widget
+  hardwired to panes[1] — the left pane's overview simply did not exist, so the
+  two never drifted apart as the sides diverged. Now one ChunkMap per pane
+  (Meld: chunkmap0..2 in filediff.ui), each with its own pane/chunks/total and
+  its own click->jump. Width 2 -> 1 cell (user: one char is enough).
+  LEFT SCROLLBAR (I previously told the user Textual couldn't; it can):
+  Widget._arrange_scrollbars hardcodes the right edge AND the compositor passes
+  it `container_region = region.shrink(styles.gutter)` — i.e. padding is already
+  removed. So: reserve the column with styles.padding-left, then place the bar
+  at region.x - size (inside that padding). GOTCHA:
+  Widget.scrollbar_size_vertical returns 0 until the bar is shown, so the
+  padding must come from styles.scrollbar_size_vertical or the text jumps
+  sideways when a file grows past one screen (CSS `scrollbar-gutter: stable`).
+  Also: scrollbar_gutter property must NOT reserve vertically or the space is
+  taken twice. 3-way middle pane hides its bar (sandwiched between two gutters),
+  matching bmeld. Scrollbars themed off theme.gutter_bg/unknown_fg (were black).
+  Fixed while there: the text gutter drew push arrows on row 0, which lines up
+  with the panes' title border and maps to the line ABOVE the viewport.
 - Still open (bmeld): conflict 3-way FROM the VC view (spec ready,
   untested in browser), tier-3 relay transport, Playwright job in CI,
   favicon, dark theme toggle (palette plumbing exists), folder copy/

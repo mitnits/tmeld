@@ -27,7 +27,7 @@ from tmeld.palette import Theme
 class ChunkMap(GraphicsOverlay, Widget):
     DEFAULT_CSS = """
     ChunkMap {
-        width: 2;
+        width: 1;
     }
     """
 

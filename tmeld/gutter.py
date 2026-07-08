@@ -135,7 +135,12 @@ class ActionGutter(GraphicsOverlay, Widget):
 
         segments = []
         for col in (0, 1):
-            entry = self._starts[col].get(doc_line[col])
+            # Gutter row 0 lines up with the panes' title border, and maps to
+            # the document line just above the viewport: never an action there.
+            entry = (
+                None if y < PANE_BORDER_ROWS
+                else self._starts[col].get(doc_line[col])
+            )
             action = self._action(col) if entry is not None else None
             if action is not None:
                 _index, tag = entry
@@ -157,6 +162,8 @@ class ActionGutter(GraphicsOverlay, Widget):
 
     def on_click(self, event: events.Click) -> None:
         if 0 < event.x < self.size.width - 1:
+            return
+        if event.y < PANE_BORDER_ROWS:
             return
         col = 0 if event.x == 0 else 1
         entry = self._starts[col].get(self._doc_line(col, event.y))
