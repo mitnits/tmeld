@@ -62,6 +62,13 @@ class DiffPane(GraphicsOverlay, TextArea):
         # Meld's redo (TextArea ships ctrl+z/ctrl+y; Meld muscle memory
         # expects ctrl+shift+z as well)
         Binding("ctrl+shift+z", "redo", "Redo", show=False),
+        # Alt aliases for the edit trio. Terminals hand Ctrl+C to the job
+        # control layer more often than to the app, and none of alt+z/x/c
+        # collide with Meld's keymap (which uses alt+arrows, alt+delete,
+        # alt+m, alt+[ ] ; ' and alt+pgup/pgdn).
+        Binding("alt+z", "undo", "Undo", show=False),
+        Binding("alt+x", "cut", "Cut", show=False),
+        Binding("alt+c", "copy", "Copy", show=False),
     ]
 
     class Scrolled(Message):

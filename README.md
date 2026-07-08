@@ -45,6 +45,7 @@ Textual than Debian ships; system Python packages are untouched).
 | Delete chunk | Alt+Delete |
 | Next / previous conflict (3-way) | Ctrl+K / Ctrl+J |
 | Merge all non-conflicting (3-way) | Alt+M |
+| Undo / cut / copy | Ctrl+Z, Alt+Z / Ctrl+X, Alt+X / Ctrl+C, Alt+C |
 | Save | Ctrl+S |
 | Next / previous pane | Alt+PgDn / Alt+PgUp |
 | Close tab | Ctrl+W (twice if unsaved) |

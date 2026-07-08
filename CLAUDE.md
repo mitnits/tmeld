@@ -439,6 +439,14 @@ working context that isn't in either.
   their keep for SUB-CELL geometry (bezier curves, 1px chunk lines, 2px insert
   markers). A tab highlight is a solid rect on cell boundaries — cells render it
   exactly, for free, on every terminal; sixel would also erase the tab's glyphs.
+- Alt+Z / Alt+X / Alt+C alias undo/cut/copy on DiffPane (user, round 12).
+  Free: Meld's keymap only uses alt+arrows, alt+delete, alt+m, alt+[ ] ; ' and
+  alt+pgup/pgdn, and neither TmeldApp nor FileDiffView binds them. Worth having
+  because Textual's App binds ctrl+c -> help_quit as a SYSTEM binding; TextArea's
+  copy only wins while a pane is focused, and terminals often eat ctrl+c anyway.
+  TextArea.action_cut already guards read_only, so no extra check. NOT added to
+  bmeld: the browser already routes ctrl+z/x/c to the editor natively, and
+  alt+<letter> is a menu accelerator there.
 - Still open (bmeld): conflict 3-way FROM the VC view (spec ready,
   untested in browser), tier-3 relay transport, Playwright job in CI,
   favicon, dark theme toggle (palette plumbing exists), folder copy/
