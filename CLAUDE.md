@@ -521,6 +521,22 @@ working context that isn't in either.
   known. Wrong-front-end flags now error (`--bind requires --web`,
   `--graphics applies to the terminal`) instead of being silently ignored.
   bmeld gets no --web flag (it is implied) and its --graphics error names tmeld.
+- Debian packaging, round 2 (user wants it on a few machines). The deb shipped
+  tmeld + tmeld-dump only — NO bmeld, no aiohttp. aiohttp is NOT bundled on
+  purpose: it and multidict/yarl/frozenlist/propcache carry C extensions, so
+  vendoring would flip Architecture: all -> amd64. Debian 13 ships
+  python3-aiohttp 3.11.16 (>= our 3.9 floor) and it is pure-python there, so it
+  is a Recommends; the launcher inserts /usr/share/tmeld/lib at sys.path[0],
+  which keeps the bundled Textual ahead of Debian's 2.1.2 WITHOUT hiding
+  dist-packages, so `import aiohttp` finds the system copy. Verified end to end:
+  apt install ./deb, /usr/bin/bmeld serves, GET 200.
+  GOTCHA fixed: rules deleted *.dist-info, so `textual.__version__`
+  (importlib.metadata.version) raised PackageNotFoundError. Nothing in our path
+  reads it — by luck. Now kept (+279KB, lintian still clean) and CI asserts it.
+  maint/mkdeb.sh stamps <version>+<date>.<sha>[.dirty] so rebuilds upgrade in
+  place (0.4.0 < 0.4.0+20260708.abc1234 < 0.5.0), and restores debian/changelog
+  on exit via trap or the next build stamps ".dirty" forever.
+  NOTE ~/.local/bin/tmeld (dev symlink) shadows /usr/bin/tmeld on mini.
 - Still open (bmeld): conflict 3-way FROM the VC view (spec ready,
   untested in browser), tier-3 relay transport, Playwright job in CI,
   favicon, dark theme toggle (palette plumbing exists), folder copy/

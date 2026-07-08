@@ -29,11 +29,18 @@ them back (in `bmeld` too).
 
 From PyPI: `pipx install tmeld` (or `pip install tmeld`).
 
-As a Debian package: grab `tmeld_*_all.deb` from the GitHub release
-and `sudo dpkg -i` it, or build it yourself with
-`dpkg-buildpackage -us -uc -b` (needs network: the build bundles the
-pinned Textual under `/usr/share/tmeld/lib`, since tmeld needs a newer
-Textual than Debian ships; system Python packages are untouched).
+As a Debian package: grab `tmeld_*_all.deb` from the GitHub release, or
+build one yourself with `maint/mkdeb.sh` (needs network: the build bundles
+the pinned Textual under `/usr/share/tmeld/lib`, since tmeld needs a newer
+Textual than Debian ships; system Python packages are untouched). Install
+with `sudo apt install ./tmeld_*_all.deb` so the recommended
+`python3-aiohttp` comes along — that is what `bmeld` needs, and it is *not*
+bundled, because its C extensions would make the package
+architecture-dependent instead of `all`.
+
+`maint/mkdeb.sh` stamps each build `<version>+<date>.<sha>`, so rebuilding
+and `dpkg -i`-ing on another machine upgrades in place rather than being
+refused as the same version.
 
 ## Keys (Meld's own)
 

@@ -1,0 +1,58 @@
+.TH BMELD 1 "2026-07-08" "tmeld" "User Commands"
+.SH NAME
+bmeld \- Meld, in your browser
+.SH SYNOPSIS
+.B bmeld
+[\fIOPTION\fR]... \fIPATH\fR [\fIPATH\fR [\fIPATH\fR]]
+.SH DESCRIPTION
+.B bmeld
+is
+.BR tmeld (1)
+served to a browser: the same vendored Meld engine, palette and keybindings,
+rendered by CodeMirror with real SVG linkmap curves. It starts a local
+server, prints a clickable URL, and exits with the same
+.BR "git mergetool"
+contract as tmeld \(em 0 only if the middle pane of a three-way merge was
+saved.
+.PP
+\fBbmeld\fR and \fBtmeld \-\-web\fR are the same program. Every option that
+says \fIwhat\fR to compare (paths, \fB\-\-diff\fR, \fB\-o\fR, \fB\-\-theme\fR,
+\fB\-\-show\-line\-numbers\fR) behaves identically in both.
+.SH OPTIONS
+.TP
+.BR \-\-port " " \fIPORT\fR
+Listen on a fixed port instead of a random one. A fixed port plus a
+\fBLocalForward\fR line in \fI~/.ssh/config\fR makes remote links open in your
+local browser.
+.TP
+.BR \-\-bind " " \fIADDR\fR
+Address to listen on. The default, 127.0.0.1, accepts connections from this
+machine only. Binding wider (for example 0.0.0.0) makes the unguessable token
+in the URL the only thing between the network and a process that reads and
+writes the files under comparison, over cleartext HTTP; bmeld warns when you
+do. Use it on a network you trust, or forward the port over SSH.
+.TP
+.BR \-\-advertise " " \fIHOST\fR
+Hostname or address to put in the printed URL. Defaults to the bind address,
+or this machine's outbound address when binding a wildcard.
+.TP
+.B \-\-no\-open
+Do not try to launch a local browser.
+.TP
+.BR \-\-grace " " \fISECONDS\fR
+How long to wait for a browser to reconnect before treating the session as
+abandoned. An abandoned merge exits 1.
+.TP
+.B \-\-version
+Print the version and exit.
+.SH EXIT STATUS
+0 on success. For a three-way merge, 0 only if the middle pane was saved.
+1 if a merge was abandoned. 130 if interrupted (128 + SIGINT), so
+\fBgit mergetool\fR treats a Ctrl\-C as a failure.
+.SH NOTES
+On Debian, bmeld needs \fBpython3\-aiohttp\fR, a Recommends of this package.
+It is not bundled because it carries C extensions, which would make tmeld
+architecture\-dependent.
+.SH SEE ALSO
+.BR tmeld (1),
+.BR meld (1)

@@ -24,12 +24,16 @@ override_dh_auto_test:
 override_dh_auto_install:
 	install -d $(DESTLIB)
 	cp -a $(VENDOR)/. $(DESTLIB)/
-	rm -rf $(DESTLIB)/*.dist-info $(DESTLIB)/bin
+	# keep *.dist-info: importlib.metadata.version() is how textual (and
+	# anything else) answers __version__, and stripping it turns that into a
+	# PackageNotFoundError at some future call site. Only bin/ is useless.
+	rm -rf $(DESTLIB)/bin
 	# bundled libs are imported, never executed: drop exec bits and shebangs
 	find $(DESTLIB) -name '*.py' -perm /111 -exec chmod 0644 {} +
 	find $(DESTLIB) -name '*.py' -exec sed -i '1{/^\#!/d}' {} +
 	install -D -m 0755 debian/launchers/tmeld debian/tmeld/usr/bin/tmeld
 	install -D -m 0755 debian/launchers/tmeld-dump debian/tmeld/usr/bin/tmeld-dump
+	install -D -m 0755 debian/launchers/bmeld debian/tmeld/usr/bin/bmeld
 
 override_dh_auto_clean:
 	rm -rf $(VENDOR)

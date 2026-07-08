@@ -14,7 +14,8 @@ Vcs-Browser: https://github.com/mitnits/tmeld
 Package: tmeld
 Architecture: all
 Depends: python3 (>= 3.10)
-Recommends: git
+Recommends: git,
+            python3-aiohttp (>= 3.9),
 Suggests: meld
 Description: Meld, in your terminal - TUI diff and merge tool
  A faithful terminal port of GNOME Meld: the same diff engine (vendored
@@ -25,6 +26,11 @@ Description: Meld, in your terminal - TUI diff and merge tool
  mergetool contract, folder comparison, a version-control status view,
  and anti-aliased linkmap graphics on sixel or kitty-graphics capable
  terminals.
+ .
+ Also ships bmeld, the same program served to a browser (tmeld --web).
+ That needs python3-aiohttp, which Debian provides and which is therefore
+ a Recommends rather than a bundled copy: aiohttp carries C extensions,
+ and vendoring it would make this an architecture-dependent package.
  .
  This package bundles its Python dependencies (Textual and friends)
  under /usr/share/tmeld because tmeld requires newer versions than

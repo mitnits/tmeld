@@ -205,10 +205,12 @@ def run_web(parser, args) -> int:
     try:
         from tmeld.web.server import make_session, run_session
     except ImportError:
-        parser.error(
-            "the browser front-end needs aiohttp — "
-            "install with: pip install 'tmeld[web]'"
-        )
+        # Distro packages bundle Textual but not aiohttp (it has C extensions);
+        # point at the right installer for how this copy was installed.
+        packaged = __file__.startswith("/usr/share/")
+        how = ("apt install python3-aiohttp" if packaged
+               else "pip install 'tmeld[web]'")
+        parser.error(f"the browser front-end needs aiohttp — install with: {how}")
 
     try:
         session = make_session(

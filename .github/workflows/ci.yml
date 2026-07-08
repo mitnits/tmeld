@@ -71,7 +71,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential debhelper devscripts lintian \
-            python3-pip python3-setuptools
+            python3-pip python3-setuptools python3-aiohttp
       - name: Build .deb
         run: dpkg-buildpackage -us -uc -b
       - name: Lintian
@@ -80,8 +80,17 @@ jobs:
         run: |
           sudo dpkg -i ../tmeld_*_all.deb
           /usr/bin/tmeld --version
+          /usr/bin/bmeld --version
           printf 'a\n' > /tmp/a; printf 'b\n' > /tmp/b
           /usr/bin/tmeld-dump /tmp/a /tmp/b | grep -q replace
+          # bmeld must reach the *system* aiohttp: it is not bundled, because
+          # its C extensions would make this Architecture: any
+          /usr/bin/bmeld --port 8799 --no-open --grace 2 /tmp/a /tmp/b > /tmp/b.out 2>&1 &
+          sleep 3
+          grep -q 'http://127.0.0.1:8799/t/' /tmp/b.out
+          # the bundled textual must keep its dist-info, or a future
+          # importlib.metadata.version() call raises PackageNotFoundError
+          python3 -c "import sys; sys.path.insert(0, '/usr/share/tmeld/lib'); import textual; assert textual.__version__.startswith('8'), textual.__version__"
       - name: Collect artifact
         # dpkg-buildpackage writes to the parent dir; upload-artifact
         # refuses '..' paths

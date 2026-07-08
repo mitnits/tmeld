@@ -1,0 +1,15 @@
+#!/usr/bin/python3
+"""bmeld launcher: runs against the libraries bundled in the package.
+
+aiohttp is *not* bundled -- it has C extensions, and Debian ships a new enough
+one -- so the system dist-packages must stay on sys.path. Inserting at position
+0 keeps the bundled Textual ahead of Debian's older copy without hiding it.
+"""
+import sys
+
+sys.path.insert(0, "/usr/share/tmeld/lib")
+
+from tmeld.web.cli import main
+
+if __name__ == "__main__":
+    sys.exit(main())
