@@ -65,7 +65,7 @@ class DiffPane(GraphicsOverlay, TextArea):
 
     def __init__(self, pane_index: int, theme_def: Theme, **kwargs) -> None:
         kwargs.setdefault("read_only", True)
-        kwargs.setdefault("show_line_numbers", True)
+        kwargs.setdefault("show_line_numbers", False)
         kwargs.setdefault("soft_wrap", False)
         super().__init__(**kwargs)
         self.pane_index = pane_index

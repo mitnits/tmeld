@@ -272,6 +272,12 @@ body {
   border-top: 1px solid #ddd;
   background: #fafafa;
 }
+#cursor {
+  color: #777;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  white-space: nowrap;
+}
 #hints { color: #999; margin-left: auto; }
 #build {
   color: #bbb;

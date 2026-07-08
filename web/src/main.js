@@ -43,6 +43,7 @@ const session = {
   order: [],
   active: null,         // tab id
   done: false,
+  lineNumbers: false,   // Meld hides them; the footer shows the cursor instead
 };
 
 function send(obj) {
@@ -58,6 +59,11 @@ function bell() {
 
 function setStatus(text) {
   document.getElementById("stats").textContent = text;
+}
+
+/** Meld's status bar (ui/statusbar.py): "Ln {line}, Col {column}". */
+function setCursor(text) {
+  document.getElementById("cursor").textContent = text;
 }
 
 // --- CM decorations -----------------------------------------------------------
@@ -235,7 +241,7 @@ class FileTab {
     const readonly = this.readonly.has(i);
     const editable = new Compartment();
     const extensions = [
-      lineNumbers(),
+      ...(session.lineNumbers ? [lineNumbers()] : []),
       history(),
       renderField,
       Prec.high(keymap.of(meldKeymap())),
@@ -248,6 +254,7 @@ class FileTab {
         if (update.selectionSet || update.focusChanged) {
           if (update.view.hasFocus) tab.focused = i;
           tab.updateEmphasisFromCursor(i);
+          if (update.view.hasFocus) tab.reportCursor(i);
         }
       }),
       EditorView.theme({ "&": { height: "100%" } }),
@@ -298,6 +305,15 @@ class FileTab {
     for (const pane of this.panes) pane.view.requestMeasure();
     this.renderOverlays();
     this.panes[0].view.focus();
+    this.reportCursor(0);
+  }
+
+  reportCursor(i) {
+    if (session.active !== this.id) return;
+    const view = this.panes[i].view;
+    const head = view.state.selection.main.head;
+    const line = view.state.doc.lineAt(head);
+    setCursor(`Ln ${line.number}, Col ${head - line.from + 1}`);
   }
 
   // --- geometry ---------------------------------------------------------------
@@ -970,6 +986,8 @@ function activateTab(id) {
   }
   const tab = session.tabs.get(id);
   setStatus(tab.status || "");
+  if (tab.kind === "file") tab.reportCursor(tab.focused);
+  else setCursor("");
   document.getElementById("hints").textContent = HINTS[tab.kind] || "";
   tabBar.refresh();
   tab.activate();
@@ -1053,6 +1071,7 @@ ws.onmessage = (event) => {
       root.setProperty(`--bm-${tag}-fg`, c.fg);
       root.setProperty(`--bm-${tag}-emph`, c.emphasis);
     }
+    session.lineNumbers = !!msg.line_numbers;
     const build = document.getElementById("build");
     if (build && msg.version) {
       build.textContent = `bmeld ${msg.version} · ${msg.build}`;

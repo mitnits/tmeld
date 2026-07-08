@@ -38,7 +38,8 @@ DiffSpec = Tuple[List[str], Optional[str]]
 
 
 def make_view(
-    paths: Sequence[str], theme_def, output: Optional[str] = None
+    paths: Sequence[str], theme_def, output: Optional[str] = None,
+    show_line_numbers: bool = False,
 ) -> ComparisonView:
     """Files -> FileDiffView, folders -> DirDiffView, single path ->
     VcView (Meld auto-detects comparison type from the arguments)."""
@@ -55,7 +56,8 @@ def make_view(
         raise ValueError(
             "cannot mix files and folders in one comparison"
         )
-    return FileDiffView(paths, theme_def, output=output)
+    return FileDiffView(paths, theme_def, output=output,
+                        show_line_numbers=show_line_numbers)
 
 
 class TabArrows(Static):
@@ -152,9 +154,13 @@ class TmeldApp(App):
         diffs: Optional[Sequence[DiffSpec]] = None,
         graphics: str = "none",
         cell_px: Optional[Tuple[int, int]] = None,
+        show_line_numbers: bool = False,
     ):
         super().__init__()
         self.theme_def = THEMES[theme_name]
+        # Meld hides line numbers by default; the status bar carries the
+        # cursor position instead.
+        self.show_line_numbers = show_line_numbers
         # Tier 2 pixel linkmap: "kitty" | "sixel" | "none" (gutters read
         # these on mount)
         self.graphics = graphics
@@ -165,7 +171,8 @@ class TmeldApp(App):
         # starts; self.views keeps closed tabs too — a merge tab closed
         # unsaved must still fail the exit-status contract.
         self.views: List[ComparisonView] = [
-            make_view(spec_paths, self.theme_def, output=spec_output)
+            make_view(spec_paths, self.theme_def, output=spec_output,
+                      show_line_numbers=show_line_numbers)
             for spec_paths, spec_output in diffs
         ]
         self._tab_ids = {view: f"tab{k}" for k, view in enumerate(self.views)}
@@ -283,6 +290,7 @@ class TmeldApp(App):
                 labels=message.labels,
                 readonly=message.readonly,
                 tab_title=message.tab_title,
+                show_line_numbers=self.show_line_numbers,
             )
         except OSError as err:
             self.notify(str(err), severity="error")
@@ -484,6 +492,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         help="pixel linkmap protocol (auto probes the terminal at startup)",
     )
     parser.add_argument(
+        "--show-line-numbers", action="store_true",
+        help="show line numbers in the panes (Meld hides them by default; "
+             "the status bar always shows the cursor position)",
+    )
+    parser.add_argument(
         "--version", action="version", version=f"tmeld {__version__}"
     )
     args = parser.parse_args(argv)
@@ -518,6 +531,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         app = TmeldApp(
             theme_name=args.theme, diffs=diffs,
             graphics=graphics, cell_px=cell_px,
+            show_line_numbers=args.show_line_numbers,
         )
     except (OSError, ValueError) as e:
         parser.error(str(e))

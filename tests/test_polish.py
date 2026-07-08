@@ -36,7 +36,9 @@ def test_cursor_on_changed_line_keeps_chunk_background(paths):
     files = paths(["a", "xxx", "c"], ["a", "yyy", "c"])
 
     async def scenario():
-        app = TmeldApp(files)
+        # line numbers are off by default; the current-line tint this test
+        # checks for is painted in the line-number column
+        app = TmeldApp(files, show_line_numbers=True)
         async with app.run_test(size=(100, 24)) as pilot:
             await pilot.pause()
             pane = app.panes[0]
@@ -52,7 +54,8 @@ def test_cursor_on_changed_line_keeps_chunk_background(paths):
     # cursor inside the chunk it is the *current* chunk, so the fill is
     # the emphasized variant (replace fill blended toward white).
     assert svg.count("DEEEFF") >= 2
-    # Line-number highlight (Meld current-line tint) present
+    # Meld tints the current line in the line-number column, so this only means
+    # anything with the numbers shown (they are off by default).
     assert "FFFFBF" in svg
 
 

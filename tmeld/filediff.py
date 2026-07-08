@@ -59,10 +59,12 @@ class FileDiffView(ComparisonView):
         labels: Optional[Sequence[Optional[str]]] = None,
         readonly: Sequence[int] = (),
         tab_title: Optional[str] = None,
+        show_line_numbers: bool = False,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
         self.theme_def = theme_def
+        self.show_line_numbers = show_line_numbers
         # Comparison reads the files here, so a bad path fails before
         # the shell mounts the view (clean CLI error, no TUI teardown)
         self.comparison = Comparison(paths, output=output)
@@ -76,12 +78,22 @@ class FileDiffView(ComparisonView):
         self.current_chunk = None  # merge-cache index of chunk at cursor
         self.dirty = [False] * self.num_panes
         self.merged_saved = False  # 3-way: middle pane saved at least once
-        self.status_text = ""
+        self._summary = ""
+        self._cursor = (0, 0)
         self._rediff_timer = None
 
     @property
     def num_panes(self) -> int:
         return self.comparison.num_panes
+
+    @property
+    def status_text(self) -> str:
+        """Change summary plus the cursor position, as Meld's status bar does
+        (ui/statusbar.py: "Ln {line}, Col {column}") -- so hiding the line
+        numbers costs no information."""
+        row, col = self._cursor
+        position = f"Ln {row + 1}, Col {col + 1}"
+        return f"{self._summary} · {position}" if self._summary else position
 
     def _display_name(self, i: int) -> str:
         return self.labels[i] or self.comparison.save_paths[i]
@@ -110,6 +122,7 @@ class FileDiffView(ComparisonView):
                 theme_def=self.theme_def,
                 id=f"pane{i}",
                 read_only=False,
+                show_line_numbers=self.show_line_numbers,
             )
             for i in range(self.num_panes)
         ]
@@ -183,7 +196,7 @@ class FileDiffView(ComparisonView):
         subtitle = "identical" if count == 0 else f"{count} changes"
         if conflicts:
             subtitle += f", {conflicts} conflicts"
-        self.status_text = subtitle
+        self._summary = subtitle
         self.post_message(self.StatusChanged(self))
 
     # --- Current chunk (Meld: the chunk containing the cursor) ------------
@@ -221,7 +234,10 @@ class FileDiffView(ComparisonView):
         pane = event.text_area
         if not isinstance(pane, DiffPane):
             return
-        row = event.selection.end[0]
+        row, col = event.selection.end
+        if (row, col) != self._cursor:
+            self._cursor = (row, col)
+            self.post_message(self.StatusChanged(self))
         index, _prev, _next = self.comparison.differ.locate_chunk(
             pane.pane_index, row
         )

@@ -88,6 +88,7 @@ class BmeldSession:
         specs: Sequence,  # [(paths, output), ...]
         theme: Theme,
         grace: float = 60.0,
+        line_numbers: bool = False,
     ) -> None:
         self._ids = itertools.count(0)
         self.tabs: Dict[str, TabComparison] = {}
@@ -98,6 +99,9 @@ class BmeldSession:
             self.tab_order.append(tab_id)
         self.theme = theme
         self.grace = grace
+        # Meld hides line numbers by default; the footer carries the cursor
+        # position instead.
+        self.line_numbers = line_numbers
         # every 3-way file tab ever opened must be saved for exit 0
         # (closing an unsaved merge tab still fails, like the TUI shell)
         self.merge_saved: Dict[str, bool] = {}
@@ -172,6 +176,7 @@ class BmeldSession:
             "type": "init",
             "tabs": [self._tab_payload(t) for t in self.tab_order],
             "palette": palette_payload(self.theme),
+            "line_numbers": self.line_numbers,
             "version": __version__,
             "build": build_id(),
         }
@@ -430,6 +435,8 @@ def make_session(
     output: Optional[str] = None,
     grace: float = 60.0,
     diffs: Optional[Sequence] = None,
+    line_numbers: bool = False,
 ) -> BmeldSession:
     specs = list(diffs) if diffs is not None else [(list(paths), output)]
-    return BmeldSession(specs, THEMES[theme_name], grace=grace)
+    return BmeldSession(specs, THEMES[theme_name], grace=grace,
+                        line_numbers=line_numbers)

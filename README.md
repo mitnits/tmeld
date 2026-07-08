@@ -17,7 +17,12 @@ tmeld dirA dirB                  # folder comparison (Enter opens files)
 tmeld .                          # version-control view (git, hg, svn, ...)
 tmeld a b --diff c d --diff x y  # extra comparison tabs (like meld --diff)
 tmeld --theme meld-dark a b      # Meld's dark scheme
+tmeld --show-line-numbers a b    # line numbers (off by default, as in Meld)
 ```
+
+Line numbers are hidden by default, matching Meld's defaults; the status bar
+always shows `Ln N, Col N` for the focused pane. `--show-line-numbers` brings
+them back (in `bmeld` too).
 
 ## Installing
 

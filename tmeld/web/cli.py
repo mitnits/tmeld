@@ -54,6 +54,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
              "the session as abandoned (exit 1 for unsaved merges)",
     )
     parser.add_argument(
+        "--show-line-numbers", action="store_true",
+        help="show line numbers in the panes (Meld hides them by default; "
+             "the footer always shows the cursor position)",
+    )
+    parser.add_argument(
         "--version", action="version", version=f"bmeld (tmeld) {__version__}"
     )
     args = parser.parse_args(argv)
@@ -78,7 +83,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     try:
         session = make_session(
             args.files, theme_name=args.theme, grace=args.grace,
-            diffs=diffs,
+            diffs=diffs, line_numbers=args.show_line_numbers,
         )
     except (OSError, ValueError) as err:
         parser.error(str(err))

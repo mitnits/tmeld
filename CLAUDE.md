@@ -342,6 +342,22 @@ working context that isn't in either.
   (currentColor). TUI keeps ▶ ◀ and upgrades ✕ -> ✘ (U+2718): ➡/⬅ have emoji
   presentation, so terminals render them double-width in a fixed colour --
   no single-cell heavy arrow pair exists. 164 tests green.
+- Line numbers OFF by default (user, 2026-07-08 — matches their Meld
+  settings, and frees TUI real estate). `--show-line-numbers` on both
+  `tmeld` and `bmeld`. Nothing is lost: the status bar / footer now shows
+  Meld's `Ln {line}, Col {column}` (upstream ui/statusbar.py:112) for the
+  focused pane. TUI: FileDiffView.status_text became a PROPERTY composing
+  _summary + _cursor (was a plain attr); DirDiffView/VcView still set the
+  attr. NOTE the current-line tint (#ffffbf) is painted in the line-number
+  column, so it vanishes with numbers off — test_polish's cursor-line test
+  now passes show_line_numbers=True.
+- Degenerate-band alignment (user caught it again, 2026-07-08): the pane's
+  insert marker covers [top, top+2) but the connector's zero-height band used
+  upstream's straddling nudges → [top-1, top+1). Fixed BOTH front-ends:
+  bmeld chunkEdges() → [top+0.5, top+MARK_PX-0.5] (and grows upwards at EOF,
+  where CM has no line to attach to so `.bm-mark-end` hangs off the last one);
+  tmeld connectors_for_chunks() centres the degenerate band half a marker
+  below the boundary. MARK_PX/INSERT_MARKER_PX must stay in sync with the CSS.
 - Still open (bmeld): conflict 3-way FROM the VC view (spec ready,
   untested in browser), tier-3 relay transport, Playwright job in CI,
   favicon, dark theme toggle (palette plumbing exists), folder copy/
