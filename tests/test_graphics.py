@@ -216,3 +216,52 @@ def test_icon_colour_follows_the_fill_not_the_tag():
     assert theme.chunk["delete"].fg != theme.chunk["insert"].fg  # upstream quirk
     assert theme.chunk_fg("delete") == theme.chunk["insert"].fg
     assert theme.chunk_fg("replace") == theme.chunk["replace"].fg
+
+
+def test_arrow_box_matches_melds_proportions():
+    """Meld's meld-change-apply-right is 13x12 -- a shade wider than tall.
+
+    Sizing the box to one cell wide made it spindly; the width is driven off
+    the height so it stays chunky at every cell size, and two arrows can never
+    meet in the middle of the gutter.
+    """
+    from tmeld.gutter import GRAPHIC_IMAGE_COLS
+
+    for cell_w, cell_h in ((7, 15), (8, 16), (9, 19), (10, 20)):
+        width_px = GRAPHIC_IMAGE_COLS * cell_w
+        arrow_h = max(8, min(cell_h - 4, 13))
+        arrow_w = max(7, min(round(arrow_h * 1.1), width_px // 3))
+        assert 0.95 <= arrow_w / arrow_h <= 1.2, (cell_w, cell_h, arrow_w, arrow_h)
+        assert 2 * arrow_w < width_px, "arrows would collide"
+        assert arrow_h <= cell_h, "arrow taller than its row"
+
+
+def test_arrow_is_solid_through_the_shaft():
+    """Thin arrows were the complaint: the shaft must be a third of the height."""
+    from tmeld.linkmap import _Canvas, draw_arrow
+
+    w, h = 13, 12
+    canvas = _Canvas(w, h)
+    draw_arrow(canvas, 0, 0, w, h, (0, 0, 0), pointing_right=True)
+    opaque = lambda x, y: canvas.data[(y * w + x) * 4 + 3] > 200
+    shaft_px = sum(opaque(1, y) for y in range(h))
+    assert shaft_px >= 4, f"shaft only {shaft_px}px of {h}"
+    assert shaft_px / h >= 0.33
+    # the head reaches the far edge on the centre line -- antialiased to a
+    # point, so it is present rather than fully opaque
+    alpha = lambda x, y: canvas.data[(y * w + x) * 4 + 3]
+    assert alpha(w - 1, h // 2) > 0, "arrow head does not reach the tip"
+    assert opaque(w - 7, h // 2), "head base should be solid"
+    # ...and the tip is a point, not a block
+    assert alpha(w - 1, 1) == 0
+
+
+def test_cross_is_heavy():
+    from tmeld.linkmap import _Canvas, draw_delete
+
+    w = h = 11
+    canvas = _Canvas(w, h)
+    draw_delete(canvas, 0, 0, w, h, (0, 0, 0))
+    opaque = lambda x, y: canvas.data[(y * w + x) * 4 + 3] > 200
+    assert sum(opaque(0, y) for y in range(h)) >= 2, "stroke too thin at the edge"
+    assert opaque(w // 2, h // 2), "strokes must cross at the centre"

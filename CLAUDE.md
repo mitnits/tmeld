@@ -399,6 +399,12 @@ working context that isn't in either.
   lines are green) but its fg stays meld:delete's dark red, which the DIR TREE
   uses for removed files. An icon on the green fill must not be red, so
   Theme.chunk_fg(tag) maps delete->insert; don't "fix" the palette instead.
+  Arrow geometry (user: "make them fatter"): Meld's meld-change-apply-right is
+  13x12 px — WIDER than tall (1.08). Ours was 9x12 (0.75), i.e. squeezed
+  horizontally, which reads as thin; the shaft ratio (h/3) already matched.
+  Fix: drive arrow_w off arrow_h (round(h*1.1)), shaft 0.36*h, head 0.5*w,
+  cross thickness min(w,h)/3.5. Verify by rasterizing to PNG and looking — the
+  numbers alone hid both the red arrow and a cross jammed against the edge.
   Gutter background is now Theme.gutter_bg = blend(page_bg, text_fg, 0.06) in
   BOTH modes (kitty composites over the cells, sixel bakes it in) — Meld's
   linkmap sits on the window background, not the page.

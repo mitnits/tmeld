@@ -200,8 +200,10 @@ class ActionGutter(GraphicsOverlay, Widget):
         background = (
             None if self.graphics == "kitty" else self.theme_def.gutter_bg
         )
-        arrow_w = max(5, min(cell_w, width_px // 3))
-        arrow_h = max(6, min(cell_h - 4, 12))
+        # Meld's icon is 13x12 -- a shade wider than tall. Sizing the box to
+        # one cell wide made it look spindly; drive the width off the height.
+        arrow_h = max(8, min(cell_h - 4, 13))
+        arrow_w = max(7, min(round(arrow_h * 1.1), width_px // 3))
         rgba = render_connectors(
             connectors, width_px, height_px, self.theme_def,
             background=background,

@@ -186,9 +186,13 @@ def draw_arrow(
     canvas: "_Canvas", x0: int, top: float, w: int, h: int,
     rgb: RGB, pointing_right: bool,
 ) -> None:
-    """Meld's meld-change-apply icon: a solid arrow with a shaft."""
-    shaft = max(2.0, h / 3.0)
-    head_w = max(3, w // 2)
+    """Meld's meld-change-apply icon: a solid arrow with a shaft.
+
+    Proportions traced from the 16x16 original: the shaft is a third of the
+    height and the head half the width, on a box slightly wider than it is tall.
+    """
+    shaft = max(3.0, h * 0.36)
+    head_w = max(4, round(w * 0.5))
     cy = top + h / 2.0
     for i in range(w):
         if i < w - head_w:
@@ -207,7 +211,7 @@ def draw_delete(
     canvas: "_Canvas", x0: int, top: float, w: int, h: int, rgb: RGB,
 ) -> None:
     """Meld's meld-change-delete icon: a heavy cross."""
-    thick = max(2.0, min(w, h) / 4.0)
+    thick = max(2.5, min(w, h) / 3.5)
     for i in range(w):
         fx = i + 0.5
         y1 = top + fx * h / w
