@@ -129,10 +129,10 @@ class TmeldApp(App):
     DiffPane {
         width: 1fr;
         border: none;
+        /* One rule colour for every pane, focused or not: the blinking cursor
+           already says which pane you are in, and an accent-coloured title
+           border made the rule change colour halfway across the gutter. */
         border-top: round $border;
-    }
-    DiffPane:focus {
-        border-top: round $accent;
     }
     """
 

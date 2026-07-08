@@ -177,17 +177,19 @@ def test_title_rule_runs_across_the_gutter(two):
             assert bgs == {THEMES["meld-base"].page_bg.lower()}, bgs
             assert THEMES["meld-base"].gutter_bg.lower() not in bgs
 
-            # each half continues its own pane's rule
+            # each half continues its own pane's rule, and both wear the same
+            # colour: the blinking cursor marks the focused pane, not an accent
             left = view.panes[0].styles.border_top[1].hex.lower()
             right = view.panes[1].styles.border_top[1].hex.lower()
-            assert left != right, "focused and unfocused borders should differ"
+            assert left == right, "panes should share one border colour"
             colours = [seg.style.color.name.lower() for seg in strip]
             assert colours == [left, right]
 
     run(scenario())
 
 
-def test_title_rule_follows_focus(two):
+def test_title_rule_does_not_change_with_focus(two):
+    """No accent border: an orange focused pane recoloured half the rule."""
     async def scenario():
         app = TmeldApp(two)
         async with app.run_test(size=(90, 12)) as pilot:
@@ -195,20 +197,26 @@ def test_title_rule_follows_focus(two):
             view = app.views[0]
             gutter = view.gutters[0]
 
-            def halves():
-                strip = gutter.render_line(0)
-                return [seg.style.color.name.lower() for seg in strip]
+            def colours():
+                return [seg.style.color.name.lower()
+                        for seg in gutter.render_line(0)]
 
             view.panes[0].focus()
             await pilot.pause()
-            first = halves()
+            first = colours()
             view.panes[1].focus()
             await pilot.pause()
-            second = halves()
-            assert first != second, "rule did not re-tint when focus moved"
-            assert first[0] == second[1], "the focused colour should swap sides"
+            assert colours() == first, "rule changed colour with focus"
+            assert len(set(first)) == 1, f"rule is not one colour: {first}"
 
     run(scenario())
+
+
+def test_no_accent_focus_border_in_app_css():
+    from tmeld.app import TmeldApp
+
+    assert "DiffPane:focus" not in TmeldApp.CSS
+    assert "$accent" not in TmeldApp.CSS
 
 
 def test_three_way_joins_both_gutters(three):

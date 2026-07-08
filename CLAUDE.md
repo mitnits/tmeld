@@ -472,11 +472,15 @@ working context that isn't in either.
 - Title rule joins across the gutter (user, round 15): gutter row 0 lines up
   with the panes' `border-top: round`, but rendered gutter_bg — a grey notch
   directly above the ditch. ActionGutter._border_row() now draws '─' on
-  theme.page_bg, the left half in panes[0]'s border colour and the right half in
-  panes[1]'s, so the two rules meet. Colour comes from `pane.styles.border_top[1]`
-  and therefore tracks focus ($accent vs $border), so FileDiffView refreshes the
-  gutters on on_descendant_focus/blur. Checked before the graphics-mode blank
-  return; the overlay image is placed at row 1 so it never covers the rule.
+  theme.page_bg, each half taking its own pane's border colour, so the two rules
+  meet. Checked before the graphics-mode blank return; the overlay image is
+  placed at row 1, so the rule survives Tier 2.
+  Round 16: DROPPED `DiffPane:focus { border-top: round $accent }`. Textual's
+  accent is ORANGE, so the focused pane recoloured half the joined rule and the
+  colour changed sides as focus moved. Every pane now wears $border (#0178d4);
+  the blinking cursor is focus enough (user's call). The per-half lookup in
+  _border_row stays — cheap, and it is what makes the join honest if the panes
+  ever differ again. on_descendant_focus/blur repaint hook removed as dead.
 - Still open (bmeld): conflict 3-way FROM the VC view (spec ready,
   untested in browser), tier-3 relay transport, Playwright job in CI,
   favicon, dark theme toggle (palette plumbing exists), folder copy/

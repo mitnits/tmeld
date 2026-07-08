@@ -124,9 +124,9 @@ class ActionGutter(GraphicsOverlay, Widget):
 
         Gutter row 0 lines up with the panes' top border. Painting it in the
         gutter's grey left a notch above the ditch; instead each half of the
-        span continues its own pane's rule, and the two meet in the middle.
-        The colour is read from the pane, so a focused pane's rule stays lit
-        all the way to the join.
+        span continues its own pane's rule, so the two meet in the middle.
+        Both panes wear the same colour today, but the halves are drawn from
+        their own panes rather than assumed equal.
         """
         width = self.size.width
         page = self.theme_def.page_bg
