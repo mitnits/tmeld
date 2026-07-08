@@ -489,3 +489,86 @@ def test_dark_theme_bar_goes_light():
     lum = light._relative_luminance
     assert lum(light.tab_bar_bg) < lum(light.page_bg), "light theme: bar darker"
     assert lum(dark.tab_bar_bg) > lum(dark.page_bg), "dark theme: bar lighter"
+
+
+def test_lone_comparison_gets_a_corner_close_button(pair):
+    """Meld's AdwTabBar autohides at one page, and so does ours -- but then the
+    per-tab ✕ goes with it. Exactly one close affordance in each state."""
+    from tmeld.app import CloseButton
+
+    async def scenario():
+        app = TmeldApp(pair(["a"], ["b"]))
+        async with app.run_test(size=(80, 10)) as pilot:
+            await pilot.pause()
+            await pilot.pause()
+            assert not app.query_one(Tabs).display, "tab strip should be hidden"
+            assert app.query_one(CloseButton).display, "no way to close by mouse"
+
+    run(scenario())
+
+
+def test_corner_button_hides_when_the_tab_strip_appears(pair):
+    from tmeld.app import CloseButton
+
+    async def scenario():
+        app = TmeldApp(diffs=[(pair(["a"], ["b"]), None), (pair(["x"], ["y"]), None)])
+        async with app.run_test(size=(80, 10)) as pilot:
+            await pilot.pause()
+            await pilot.pause()
+            assert app.query_one(Tabs).display
+            assert not app.query_one(CloseButton).display, "two ✕ for one tab"
+
+            app.action_close_tab()          # down to one
+            await pilot.pause()
+            await pilot.pause()
+            assert not app.query_one(Tabs).display
+            assert app.query_one(CloseButton).display
+
+    run(scenario())
+
+
+def test_corner_button_closes_the_last_tab_and_quits(pair):
+    """Meld quits when its last comparison closes; so does the ✕."""
+    from tmeld.app import CloseButton
+
+    async def scenario():
+        app = TmeldApp(pair(["a"], ["b"]))
+        async with app.run_test(size=(80, 10)) as pilot:
+            await pilot.pause()
+            assert app.query_one(CloseButton).display
+            await pilot.click("#close-button")   # the mouse path, not the action
+            await pilot.pause()
+            await pilot.pause()
+            assert not app.is_running, "clicking ✕ on the last tab must quit"
+
+    run(scenario())
+
+
+def test_corner_button_clears_the_overview_strips(pair, tmp_path):
+    """Chunkmaps have no border row: their top cell is chunk data, not chrome."""
+    from tmeld.app import CloseButton
+
+    async def scenario(paths, expected_strips):
+        app = TmeldApp(paths)
+        async with app.run_test(size=(90, 10)) as pilot:
+            await pilot.pause()
+            await pilot.pause()
+            strips = len(getattr(app.view, "chunkmaps", ()))
+            assert strips == expected_strips
+            # offset is a Scalar in cells, not a bare int
+            assert app.query_one(CloseButton).styles.offset.x.value == -strips
+
+    run(scenario(pair(["a"], ["b"]), 2))
+
+    three = []
+    for name in ("local", "base", "remote"):
+        p = tmp_path / f"{name}.txt"
+        p.write_text(f"{name}\n", encoding="utf-8")
+        three.append(str(p))
+    run(scenario(three, 3))
+
+    left, right = tmp_path / "dl", tmp_path / "dr"
+    for d in (left, right):
+        d.mkdir()
+        (d / "f.txt").write_text("x\n", encoding="utf-8")
+    run(scenario([str(left), str(right)], 0))   # folder view: no strips

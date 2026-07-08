@@ -61,6 +61,20 @@ def make_view(
                         show_line_numbers=show_line_numbers)
 
 
+class CloseButton(Static):
+    """A ✕ for the sole comparison, when the tab strip is hidden.
+
+    Meld's AdwTabBar autohides at one page, and so does ours -- a strip that
+    says nothing costs a terminal row. But then the per-tab ✕ goes with it, and
+    the only way to close is Ctrl+W. This lives on the overlay layer, docked to
+    the top-right corner, so it costs no rows either: exactly one visible close
+    affordance in each state.
+    """
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__("[@click=app.close_tab]✕[/]", **kwargs)
+
+
 class TabArrows(Static):
     """Meld's notebook shift arrows: shown top-right when the tab strip
     overflows; each ◀/▶ scrolls the strip (markup @click actions)."""
@@ -128,6 +142,21 @@ class TmeldApp(App):
         background: $tmeld-tabbar;
         color: $tmeld-tabbar-fg;
         display: none;
+    }
+    /* Sits over the panes' title rule, top-right, so it costs no row. Only
+       shown when the tab strip (and its per-tab ✕) is hidden. */
+    CloseButton {
+        layer: tabarrows;
+        dock: right;
+        width: 1;
+        height: 1;
+        content-align: right middle;
+        background: $tmeld-page;
+        color: $tmeld-dim;
+        display: none;
+    }
+    CloseButton:hover {
+        color: $tmeld-text;
     }
     DiffPane {
         width: 1fr;
@@ -308,11 +337,13 @@ class TmeldApp(App):
                 with TabPane(self._tab_label(view), id=self._tab_ids[view]):
                     yield view
         yield TabArrows(id="tab-arrows")
+        yield CloseButton(id="close-button")
         yield Footer()
 
     def on_mount(self) -> None:
         self.view.focus_default()
         self._harden_tab_activation()
+        self._update_single_class()
         self.call_after_refresh(self._update_tab_arrows)
 
     def _harden_tab_activation(self) -> None:
@@ -389,7 +420,15 @@ class TmeldApp(App):
 
     def _update_single_class(self) -> None:
         open_count = len(self._tab_ids)
-        self.query_one(TabbedContent).set_class(open_count == 1, "single")
+        single = open_count == 1
+        self.query_one(TabbedContent).set_class(single, "single")
+        # With a strip there is a ✕ per tab; without one, put a ✕ in the
+        # corner. Nudge it left of the overview strips: those have no border
+        # row, so their top cell is real chunk data, not decoration.
+        strips = len(getattr(self.view, "chunkmaps", ()))
+        for button in self.query(CloseButton):
+            button.display = single
+            button.styles.offset = (-strips, 0)
         self._update_tab_arrows()
 
     # --- Tab-strip overflow (Meld's notebook shift arrows) -------------------

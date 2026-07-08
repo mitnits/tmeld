@@ -69,7 +69,7 @@ installs over the previous one instead of being refused as the same version
 | Undo / cut / copy | Ctrl+Z, Alt+Z / Ctrl+X, Alt+X / Ctrl+C, Alt+C |
 | Save | Ctrl+S |
 | Next / previous pane | Alt+PgDn / Alt+PgUp |
-| Close tab | Ctrl+W (twice if unsaved) |
+| Close tab / quit on the last one | Ctrl+W (twice if unsaved), or the ✕ |
 | Next / previous tab | Ctrl+Alt+PgDn / Ctrl+Alt+PgUp |
 | Quit | Ctrl+Q |
 

@@ -537,6 +537,19 @@ working context that isn't in either.
   place (0.4.0 < 0.4.0+20260708.abc1234 < 0.5.0), and restores debian/changelog
   on exit via trap or the next build stamps ".dirty" forever.
   NOTE ~/.local/bin/tmeld (dev symlink) shadows /usr/bin/tmeld on mini.
+- Corner ✕ for the lone comparison (user, round 22). Ctrl+W on the last tab
+  ALREADY quit — the gap was a mouse affordance, because the tab strip (and its
+  per-tab ✕) autohides at one tab. Kept the autohide: it matches Meld (appwindow.ui
+  uses AdwTabBar with no `autohide` property, which DEFAULTS to TRUE) and a strip
+  saying nothing costs a terminal row. Instead CloseButton — a 1-cell Static on
+  the `tabarrows` layer, dock:right — shown only when the strip is hidden, so
+  there is exactly one ✕ in each state and it costs ZERO rows.
+  GOTCHA: docked right, it lands on the CHUNKMAP columns, whose row 0 is real
+  chunk data (they have no border row, unlike the panes). _update_single_class
+  offsets it left by len(view.chunkmaps) — 2 in a 2-way, 3 in a 3-way, 0 for a
+  dir/VC view — so it sits on the panes' title rule instead.
+  Footer left alone: it already overflows at 96 cols, so a 10th binding would
+  fall off the end rather than teach anyone anything.
 - Still open (bmeld): conflict 3-way FROM the VC view (spec ready,
   untested in browser), tier-3 relay transport, Playwright job in CI,
   favicon, dark theme toggle (palette plumbing exists), folder copy/
