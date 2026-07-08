@@ -428,12 +428,15 @@ def test_interrupt_beats_the_saved_merge_exit_code(three):
 def test_default_bind_is_loopback_only():
     """The safe default must not drift."""
     import inspect
-    from tmeld.web import cli
+    from tmeld.cli import build_parser, resolve
     from tmeld.web.server import run_session
 
     assert inspect.signature(run_session).parameters["bind"].default == "127.0.0.1"
-    parser_src = inspect.getsource(cli.main)
-    assert '"--bind", metavar="ADDR", default="127.0.0.1"' in parser_src
+    parser = build_parser("bmeld", default_web=True)
+    args = parser.parse_args(["a", "b"])
+    assert args.bind is None, "no bind given"
+    resolve(parser, args, default_web=True)
+    assert args.bind == "127.0.0.1"
 
 
 def test_advertised_host_for_each_bind():
@@ -456,12 +459,12 @@ def test_advertised_host_for_each_bind():
             pass
 
 
-def test_non_loopback_bind_warns(three, capsys):
+def test_non_loopback_bind_warns():
     """Opting into the network must say what it costs."""
     import inspect
-    from tmeld.web import cli
+    from tmeld import cli
 
-    src = inspect.getsource(cli.main)
+    src = inspect.getsource(cli.run_web)
     assert "WARNING listening on" in src
     assert "file=sys.stderr" in src
     # and the ssh forward hint is skipped when the port is already reachable

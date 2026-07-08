@@ -37,6 +37,15 @@ startup), \fBnone\fR, \fBsixel\fR or \fBkitty\fR. On capable terminals
 the gutter between panes shows Meld's anti-aliased connector curves
 and the overview map gains pixel resolution.
 .TP
+.B \-\-web
+Serve the comparison to a browser instead of drawing it in this terminal, and
+print a clickable URL. Equivalent to the \fBbmeld\fR command.
+.TP
+.BR \-\-port " " \fIPORT\fR
+Fixed port for the browser front-end; implies \fB\-\-web\fR, since a port has
+no meaning in a terminal. See \fBbmeld\fR(1) for \fB\-\-bind\fR,
+\fB\-\-advertise\fR, \fB\-\-grace\fR and \fB\-\-no\-open\fR.
+.TP
 .B \-\-show\-line\-numbers
 Show line numbers in the panes. Off by default, matching Meld's defaults; the
 status bar always shows the cursor position as \fBLn N, Col N\fR.

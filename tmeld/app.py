@@ -550,76 +550,10 @@ class TmeldApp(App):
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    parser = argparse.ArgumentParser(
-        prog="tmeld", description="Meld, in your terminal"
-    )
-    parser.add_argument(
-        "files", nargs="*",
-        help="two or three files (3-way: LOCAL MERGED REMOTE) or folders "
-             "to compare; a single path opens the version-control view",
-    )
-    parser.add_argument(
-        "--diff", action="append", nargs="+", default=[], metavar="PATH",
-        help="open an extra comparison tab for 1-3 paths (repeatable)",
-    )
-    parser.add_argument(
-        "-o", "--output", metavar="FILE",
-        help="write middle-pane saves to FILE (3-way only, like meld -o)",
-    )
-    parser.add_argument(
-        "--theme", choices=sorted(THEMES), default=DEFAULT_THEME
-    )
-    parser.add_argument(
-        "--graphics", choices=("auto", "none", "sixel", "kitty"),
-        default="auto",
-        help="pixel linkmap protocol (auto probes the terminal at startup)",
-    )
-    parser.add_argument(
-        "--show-line-numbers", action="store_true",
-        help="show line numbers in the panes (Meld hides them by default; "
-             "the status bar always shows the cursor position)",
-    )
-    parser.add_argument(
-        "--version", action="version", version=f"tmeld {__version__}"
-    )
-    args = parser.parse_args(argv)
+    """`tmeld` entry point. The shared CLI decides which front-end runs."""
+    from tmeld.cli import main as cli_main
 
-    if args.files and len(args.files) > 3:
-        parser.error("expected 1-3 paths")
-    for group in args.diff:
-        if len(group) > 3:
-            parser.error("--diff takes 1-3 paths")
-    if not args.files and not args.diff:
-        parser.error("expected 1-3 paths to compare")
-    if args.output and len(args.files) != 3:
-        parser.error("--output requires a 3-way comparison")
-
-    diffs: List[DiffSpec] = []
-    if args.files:
-        diffs.append((args.files, args.output))
-    diffs.extend((group, None) for group in args.diff)
-
-    graphics = args.graphics
-    if graphics == "auto":
-        from tmeld.term import probe_graphics
-
-        graphics = probe_graphics()
-    cell_px = None
-    if graphics != "none":
-        from tmeld.term import cell_pixel_size
-
-        cell_px = cell_pixel_size()
-
-    try:
-        app = TmeldApp(
-            theme_name=args.theme, diffs=diffs,
-            graphics=graphics, cell_px=cell_px,
-            show_line_numbers=args.show_line_numbers,
-        )
-    except (OSError, ValueError) as e:
-        parser.error(str(e))
-    app.run()
-    return app.exit_status()
+    return cli_main(argv, prog="tmeld", default_web=False)
 
 
 if __name__ == "__main__":

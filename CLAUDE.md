@@ -507,6 +507,20 @@ working context that isn't in either.
   the blinking cursor is focus enough (user's call). The per-half lookup in
   _border_row stays — cheap, and it is what makes the join honest if the panes
   ever differ again. on_descendant_focus/blur repaint hook removed as dead.
+- ONE CLI for both front-ends (user, round 21). tmeld/cli.py owns every flag,
+  the validation (which had ALREADY drifted: app.py grew "expected 1-3 paths to
+  compare", web/cli.py never had it) and the dispatch. tmeld/app.py:main and
+  tmeld/web/cli.py:main are now 2-line wrappers, so `python -m tmeld.web.cli`
+  (every scratch probe) and the `bmeld` console script still work.
+  `--web` selects the browser; `--port` IMPLIES it — safe only because a port is
+  meaningless in the TUI, so it cannot be an accident. Rejected the "port alone
+  is the trigger" idea: --port defaults to 0 = RANDOM port, so absence isn't
+  detectable from the value, and you'd lose "browser, any port". Front-end flags
+  default to None so "was it given?" is answerable; defaults (port 0, bind
+  127.0.0.1, grace 60, graphics auto) are applied only AFTER the front-end is
+  known. Wrong-front-end flags now error (`--bind requires --web`,
+  `--graphics applies to the terminal`) instead of being silently ignored.
+  bmeld gets no --web flag (it is implied) and its --graphics error names tmeld.
 - Still open (bmeld): conflict 3-way FROM the VC view (spec ready,
   untested in browser), tier-3 relay transport, Playwright job in CI,
   favicon, dark theme toggle (palette plumbing exists), folder copy/

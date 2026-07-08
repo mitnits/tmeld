@@ -18,6 +18,7 @@ tmeld .                          # version-control view (git, hg, svn, ...)
 tmeld a b --diff c d --diff x y  # extra comparison tabs (like meld --diff)
 tmeld --theme meld-dark a b      # Meld's dark scheme
 tmeld --show-line-numbers a b    # line numbers (off by default, as in Meld)
+tmeld --web a b                  # serve it to a browser instead (see bmeld)
 ```
 
 Line numbers are hidden by default, matching Meld's defaults; the status bar
@@ -72,7 +73,21 @@ deletes, Ctrl+R/F5 rescans.
 
 ## bmeld: Meld in your browser
 
-`pip install 'tmeld[web]'` adds the `bmeld` command: it starts a local
+`pip install 'tmeld[web]'` adds the `bmeld` command — the same program as
+`tmeld --web`, under its own name. `--port` implies `--web`, since a port
+means nothing in a terminal:
+
+```
+tmeld a b               # terminal
+tmeld --web a b         # browser, random port
+tmeld --port 8731 a b   # browser on a fixed port
+bmeld a b               # exactly `tmeld --web a b`
+```
+
+Options that belong to the other front-end are refused rather than ignored
+(`tmeld --bind 0.0.0.0` says `--bind requires --web`).
+
+It starts a local
 server (127.0.0.1 only, token-protected) and prints a clickable URL —
 the same engine, palette and keybindings, rendered by CodeMirror with
 real SVG linkmap curves. Typing is local and instant; the server
