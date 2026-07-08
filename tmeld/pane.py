@@ -7,7 +7,7 @@ under) and inline highlight ranges (styled over). One private attribute
 line indexes arrive directly in get_line. Textual is pinned to 8.x.
 """
 
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from rich.style import Style
 from textual.binding import Binding
@@ -15,7 +15,11 @@ from textual.message import Message
 from textual.widgets import TextArea
 from textual.widgets.text_area import TextAreaTheme
 
+from tmeld.linkmap import INSERT_MARKER_PX, _hex_rgb, render_insert_marker
+from tmeld.overlay import GraphicsOverlay, OverlayImage
 from tmeld.palette import Theme
+
+PANE_BORDER_ROWS = 1
 
 
 def build_textarea_theme(theme_def: Theme) -> TextAreaTheme:
@@ -44,7 +48,7 @@ def build_textarea_theme(theme_def: Theme) -> TextAreaTheme:
     return theme
 
 
-class DiffPane(TextArea):
+class DiffPane(GraphicsOverlay, TextArea):
     """One comparison pane. Editable since Phase 3."""
 
     BINDINGS = [
@@ -75,6 +79,57 @@ class DiffPane(TextArea):
         self.register_theme(ta_theme)
         self.theme = ta_theme.name
         self._sync_target: int | None = None
+        # (line, tag) for chunks with no lines on this side -- the other pane
+        # is adding text there. Drawn as Meld's thin line, Tier 2 only.
+        self._insert_markers: List[Tuple[int, str]] = []
+
+    def on_mount(self) -> None:
+        # TextArea has its own on_mount; Textual dispatches only the most
+        # derived handler, so it must be chained explicitly.
+        super().on_mount()
+        self._init_graphics()
+
+    def set_insert_markers(self, markers: Sequence[Tuple[int, str]]) -> None:
+        if list(markers) != self._insert_markers:
+            self._insert_markers = list(markers)
+        self.refresh_overlay()
+
+    def _render_overlays(self) -> List[OverlayImage]:
+        """One thin image per visible insert marker.
+
+        kitty only. Sixel pixels *become* cell content, so a marker drawn over
+        a text row would erase its glyphs -- the gutter and chunkmap get away
+        with sixel because the cells beneath them are blank. kitty images float
+        above the cells and carry alpha, so they composite.
+
+        One thin opaque image per marker rather than a single whole-pane
+        translucent one: measured 0.12ms for one marker and 1.5ms for forty,
+        against 7ms to build and encode a 640x640 pane image on every scroll.
+        """
+        if self.graphics != "kitty" or not self._insert_markers:
+            return []
+        region = self.content_region
+        if not region.width or not region.height:
+            return []
+        cell_w, cell_h = self.cell_px
+        gutter = self.gutter_width
+        width_px = max(1, (region.width - gutter) * cell_w)
+        scroll_y = int(self.scroll_offset.y)
+
+        images: List[OverlayImage] = []
+        for line, tag in self._insert_markers:
+            row = line - scroll_y
+            if not 0 <= row < region.height:
+                continue
+            chunk_style = self.theme_def.chunk.get(tag)
+            if chunk_style is None:
+                continue
+            images.append((
+                render_insert_marker(width_px, _hex_rgb(chunk_style.line)),
+                width_px, INSERT_MARKER_PX,
+                region.y + row, region.x + gutter,
+            ))
+        return images
 
     def _set_theme(self, theme: str) -> None:
         # apply_css() runs per-render and backfills every *non-configured*

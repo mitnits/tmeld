@@ -244,6 +244,22 @@ def render_chunk_map(
 # --- kitty graphics protocol -------------------------------------------------
 
 
+INSERT_MARKER_PX = 2
+
+
+def render_insert_marker(width_px: int, rgb: RGB) -> bytearray:
+    """An opaque 2px line: Meld's zero-height chunk.
+
+    Upstream draws every chunk with a [top, 0, bottom, 0] border on a rect of
+    height max(1, y1 - y0) + 1 (sourceview.py do_snapshot), so a chunk with no
+    lines on this side collapses to a single thin line at the point where the
+    other pane's text would land. Opaque, so it needs no alpha compositing --
+    it only covers the top two pixel rows of a character cell.
+    """
+    row = bytes((rgb[0], rgb[1], rgb[2], 255)) * width_px
+    return bytearray(row * INSERT_MARKER_PX)
+
+
 def kitty_place_escape(
     image_id: int, rgba: bytes, width_px: int, height_px: int
 ) -> str:

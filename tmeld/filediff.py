@@ -163,6 +163,12 @@ class FileDiffView(ComparisonView):
         for i, pane in enumerate(self.panes):
             pane.border_title = self._pane_title(i)
             pane.set_chunk_styling(comparison.line_tags(i), inline[i])
+            # Chunks with no lines on this side: the other pane adds text
+            # there. Meld marks the spot with a thin line (Tier 2 draws it).
+            pane.set_insert_markers([
+                (c.start_a, c.tag) for c in comparison.pane_chunks(i)
+                if c.start_a == c.end_a
+            ])
         self._apply_emphasis()
         for k, gutter in enumerate(self.gutters):
             gutter.set_starts(comparison.action_starts(k))
@@ -459,6 +465,8 @@ class FileDiffView(ComparisonView):
     # --- Synchronized scrolling (PARITY.md §4) ----------------------------
 
     def on_diff_pane_scrolled(self, message: DiffPane.Scrolled) -> None:
+        for pane in self.panes:
+            pane.refresh_overlay()
         for gutter in self.gutters:
             gutter.refresh()
             gutter.refresh_overlay()
@@ -581,7 +589,7 @@ class FileDiffView(ComparisonView):
     def _overlay_widgets(self):
         # query (not query_one): a just-closed tab's view is already
         # unmounted when the shell delivers the final on_tab_hidden
-        return (*self.gutters, *self.query(ChunkMap))
+        return (*self.panes, *self.gutters, *self.query(ChunkMap))
 
     def on_tab_shown(self) -> None:
         for widget in self._overlay_widgets():

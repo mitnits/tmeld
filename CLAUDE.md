@@ -325,10 +325,18 @@ working context that isn't in either.
   line colour on a rect of height max(1, y1-y0)+1 -- so a zero-height chunk
   collapses to one 2px line marking where the other pane's text lands, with no
   fill (sourceview.py do_snapshot). bmeld: .bm-mark box-shadow, verified as
-  exactly 2px of #a5ff4c. TUI: NOT POSSIBLE in Tier 1 -- neither rich.Style nor
+  exactly 2px of #a5ff4c. TUI: impossible in Tier 1 -- neither rich.Style nor
   textual.style.Style exposes an underline colour (SGR 58), and there is no
-  sub-cell drawing between rows. Options are a colourless underline on the row
-  above, or a Tier-2 pixel overlay drawn over the pane (deferred).
+  sub-cell drawing between rows. DONE in Tier 2, KITTY ONLY (user chose it):
+  DiffPane is now a GraphicsOverlay; _render_overlays() returns one opaque
+  2px-tall image per VISIBLE marker (0.12ms each, 1.5ms for 40; a whole-pane
+  translucent image is 7ms/scroll). GOTCHA: sixel pixels BECOME cell content,
+  so a marker over a text row erases its glyphs -- the gutter/chunkmap only get
+  away with sixel because their cells are blank. kitty images float above cells
+  and carry alpha. GOTCHA: TextArea defines on_mount, and Textual dispatches
+  only the most-derived handler, so DiffPane.on_mount must call super(). Image
+  ids are now allocated in blocks (overlay.IMAGE_IDS_PER_WIDGET=256) since one
+  widget places many images; stale ids are deleted when markers scroll away.
   Icons: Meld's meld-change-apply-right is a solid arrow WITH A SHAFT and
   meld-change-delete a heavy cross. bmeld now draws both as inline SVG paths
   (currentColor). TUI keeps ▶ ◀ and upgrades ✕ -> ✘ (U+2718): ➡/⬅ have emoji
