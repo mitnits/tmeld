@@ -88,6 +88,7 @@ bmeld a b --diff c d               # extra comparison tabs
 bmeld --port 8731 a.py b.py        # fixed port: add a LocalForward line
                                    # to ~/.ssh/config and remote links
                                    # open on your local browser
+bmeld --bind 0.0.0.0 a.py b.py     # reachable from other machines (see below)
 ```
 
 File, folder, and version-control comparisons open as tabs (with ✕
@@ -96,6 +97,14 @@ close buttons); Enter/double-click a tree row opens a file comparison.
 Over SSH, bmeld prints the port-forward one-liner instead of trying to
 open a browser. Sessions survive reloads; closing the tab without
 saving a merge exits 1 after a grace period (`--grace`).
+
+By default bmeld listens on loopback only. `--bind 0.0.0.0` accepts
+connections from other machines and prints a URL with this host's
+outbound address (override with `--advertise HOST`). Understand what
+that costs: the unguessable token in the URL becomes the only thing
+between the network and a process that reads and writes the files under
+comparison, and it travels in cleartext over HTTP. Use it on a network
+you trust, or keep the SSH tunnel.
 
 ## Pixel linkmap (Tier 2)
 

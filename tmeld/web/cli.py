@@ -45,6 +45,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
              "just work.",
     )
     parser.add_argument(
+        "--bind", metavar="ADDR", default="127.0.0.1",
+        help="address to listen on (default: 127.0.0.1, loopback only). "
+             "Use 0.0.0.0 to accept connections from other machines: the "
+             "token in the URL is then the only thing protecting a process "
+             "that reads and writes your files, over plain HTTP.",
+    )
+    parser.add_argument(
+        "--advertise", metavar="HOST",
+        help="hostname or address to put in the printed URL (default: the "
+             "bind address, or this machine's outbound IP when binding "
+             "a wildcard)",
+    )
+    parser.add_argument(
         "--no-open", action="store_true",
         help="don't try to open a local browser",
     )
@@ -89,11 +102,22 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         parser.error(str(err))
 
     token = secrets.token_urlsafe(16)
+    loopback = args.bind in ("127.0.0.1", "::1", "localhost")
     under_ssh = "SSH_CONNECTION" in os.environ
+
+    if not loopback:
+        print(
+            f"bmeld: WARNING listening on {args.bind} — anyone who can reach "
+            f"this port and guess the URL can read and write the files under "
+            f"comparison. The token is unguessable but travels in cleartext "
+            f"over HTTP; do not use this on an untrusted network.",
+            file=sys.stderr, flush=True,
+        )
 
     def announce(url: str) -> None:
         print(f"bmeld: {osc8(url)}", flush=True)
-        if under_ssh:
+        if under_ssh and loopback:
+            # reachable only from this host, so the link needs a tunnel
             port = url.rsplit(":", 1)[1].split("/", 1)[0]
             print(
                 f"bmeld: (remote session — forward the port first, e.g. "
@@ -101,12 +125,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 f"then open the link locally)",
                 flush=True,
             )
-        elif not args.no_open:
+        elif not under_ssh and not args.no_open:
             webbrowser.open(url)
 
     try:
         return asyncio.run(
-            run_session(session, token, port=args.port, on_url=announce)
+            run_session(session, token, port=args.port, on_url=announce,
+                        bind=args.bind, advertise=args.advertise)
         )
     except KeyboardInterrupt:
         # run_session normally handles SIGINT itself and returns 130; this is

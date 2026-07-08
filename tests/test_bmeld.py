@@ -423,3 +423,65 @@ def test_interrupt_beats_the_saved_merge_exit_code(three):
     assert session.exit_status() == 0
     session.interrupt()
     assert session.exit_status() == 130
+
+
+def test_default_bind_is_loopback_only():
+    """The safe default must not drift."""
+    import inspect
+    from tmeld.web import cli
+    from tmeld.web.server import run_session
+
+    assert inspect.signature(run_session).parameters["bind"].default == "127.0.0.1"
+    parser_src = inspect.getsource(cli.main)
+    assert '"--bind", metavar="ADDR", default="127.0.0.1"' in parser_src
+
+
+def test_advertised_host_for_each_bind():
+    """A wildcard bind tells us nothing about reachability: ask the route table."""
+    import ipaddress
+    from tmeld.web.server import advertised_host
+
+    assert advertised_host("127.0.0.1") == "127.0.0.1"
+    assert advertised_host("192.168.1.50") == "192.168.1.50"
+    assert advertised_host("::1") == "[::1]"          # bracketed for a URL
+
+    for wildcard in ("0.0.0.0", "::", ""):
+        host = advertised_host(wildcard)
+        assert host and host not in ("0.0.0.0", "::"), host
+        # either a routable address or, if the probe failed, a hostname
+        try:
+            ip = ipaddress.ip_address(host)
+            assert not ip.is_unspecified
+        except ValueError:
+            pass
+
+
+def test_non_loopback_bind_warns(three, capsys):
+    """Opting into the network must say what it costs."""
+    import inspect
+    from tmeld.web import cli
+
+    src = inspect.getsource(cli.main)
+    assert "WARNING listening on" in src
+    assert "file=sys.stderr" in src
+    # and the ssh forward hint is skipped when the port is already reachable
+    assert "if under_ssh and loopback:" in src
+
+
+def test_server_binds_where_it_is_told(three):
+    """The site really listens on the given address, not just in the help text."""
+    async def scenario():
+        session = make_session(three)
+        app = make_app(session, TOKEN)
+        runner = aiohttp.web.AppRunner(app)
+        await runner.setup()
+        try:
+            site = aiohttp.web.TCPSite(runner, "127.0.0.1", 0)
+            await site.start()
+            host, port = runner.addresses[0][:2]
+            assert host == "127.0.0.1"
+            assert port > 0
+        finally:
+            await runner.cleanup()
+
+    run(scenario())

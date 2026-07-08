@@ -5,10 +5,14 @@ Tabs mirror the TUI shell: file tabs (2/3-way Comparison) and dir tabs
 tab (`open_file`). Directory scans run in a thread executor so the
 event loop stays responsive.
 
-Security: binds 127.0.0.1 only; every route is gated by an
+Security: binds 127.0.0.1 by default; every route is gated by an
 unguessable token; CSP restricts the page to same-origin; the process
 only touches the paths given on its command line (plus files under
 the compared directories, which is the point of a dir comparison).
+
+`--bind` opts into a wider listen address. The token is then the only
+thing between the network and a process that reads and writes local
+files, and it travels in a plain-HTTP URL, so the CLI warns.
 """
 
 import asyncio
@@ -18,6 +22,7 @@ import json
 import logging
 import os
 import signal
+import socket
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Union
 
@@ -387,21 +392,43 @@ def make_app(session: BmeldSession, token: str) -> web.Application:
     return app
 
 
+def advertised_host(bind: str) -> str:
+    """The host to put in the URL, given what we bound to.
+
+    A wildcard bind tells us nothing about how to reach this machine, so ask
+    the routing table which local address would be used to leave the host. No
+    packet is sent -- connect() on a UDP socket only selects a route.
+    """
+    if bind not in ("0.0.0.0", "::", ""):
+        return f"[{bind}]" if ":" in bind else bind
+    probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        probe.connect(("192.0.2.1", 9))  # TEST-NET-1: routed, never answers
+        return probe.getsockname()[0]
+    except OSError:
+        return socket.gethostname()
+    finally:
+        probe.close()
+
+
 async def run_session(
     session: BmeldSession,
     token: str,
     port: int = 0,
     on_url=None,
+    bind: str = "127.0.0.1",
+    advertise: Optional[str] = None,
 ) -> int:
     """Serve until the session closes; returns the exit status."""
     app = make_app(session, token)
     runner = web.AppRunner(app)
     await runner.setup()
     # Don't let a wedged socket hold the process: one Ctrl-C must be enough.
-    site = web.TCPSite(runner, "127.0.0.1", port, shutdown_timeout=1.0)
+    site = web.TCPSite(runner, bind, port, shutdown_timeout=1.0)
     await site.start()
     actual_port = runner.addresses[0][1]
-    url = f"http://127.0.0.1:{actual_port}/t/{token}"
+    host = advertise or advertised_host(bind)
+    url = f"http://{host}:{actual_port}/t/{token}"
     if on_url is not None:
         on_url(url)
 

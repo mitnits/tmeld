@@ -458,6 +458,17 @@ working context that isn't in either.
   in a C/UTF-8 locale, 2 in a CJK one. Same class as the ▶ ◀ gutter arrows we
   already ship, so no new risk, but it is the reason not to reach for fancier
   glyphs.
+- bmeld `--bind ADDR` / `--advertise HOST` (user, round 14). Default stays
+  127.0.0.1. Non-loopback prints a WARNING to stderr (token is the only guard,
+  cleartext HTTP, process reads AND writes files) and suppresses the ssh
+  port-forward hint, since the port is already reachable. advertised_host()
+  resolves a wildcard bind by connect()ing a UDP socket to TEST-NET-1
+  (192.0.2.1) — no packet leaves, connect() just picks the route — falling back
+  to gethostname(); IPv6 gets bracketed for the URL. Verified in a real browser
+  over the LAN origin: the WS (`ws://${location.host}`) and CSP `default-src
+  'self'` both hold. GOTCHA while testing: earlier browser probes had pushed and
+  SAVED into /tmp/tmeld-demo, so a diff came back "identical" — rerun
+  maint/make_demo.py, that is what it is for.
 - Still open (bmeld): conflict 3-way FROM the VC view (spec ready,
   untested in browser), tier-3 relay transport, Playwright job in CI,
   favicon, dark theme toggle (palette plumbing exists), folder copy/
