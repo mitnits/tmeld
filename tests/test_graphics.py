@@ -226,12 +226,16 @@ def test_icon_colour_follows_the_fill_not_the_tag():
 
 def _arrow_box(cell_w, cell_h):
     """Mirror of ActionGutter._render_overlay's sizing."""
-    from tmeld.gutter import ARROW_HEIGHT_RATIO, GRAPHIC_IMAGE_COLS
+    from tmeld.gutter import (
+        ARROW_EDGE_MARGIN_RATIO, ARROW_HEIGHT_RATIO, GRAPHIC_IMAGE_COLS,
+    )
 
     width_px = GRAPHIC_IMAGE_COLS * cell_w
     arrow_h = max(8, min(cell_h - 3, round(cell_h * ARROW_HEIGHT_RATIO)))
-    arrow_w = max(7, min(round(arrow_h * 1.1), width_px // 3))
-    return arrow_w, arrow_h, width_px
+    margin = max(2, round(cell_w * ARROW_EDGE_MARGIN_RATIO))
+    room = (width_px - 2 * margin - cell_w) // 2
+    arrow_w = max(7, min(round(arrow_h * 1.1), room))
+    return arrow_w, arrow_h, width_px, margin
 
 
 CELLS = ((7, 15), (8, 16), (9, 19), (10, 20), (11, 24), (12, 26), (14, 32))
@@ -245,10 +249,11 @@ def test_arrow_box_matches_melds_proportions():
     meet in the middle of the gutter.
     """
     for cell_w, cell_h in CELLS:
-        arrow_w, arrow_h, width_px = _arrow_box(cell_w, cell_h)
+        arrow_w, arrow_h, width_px, margin = _arrow_box(cell_w, cell_h)
         assert 0.95 <= arrow_w / arrow_h <= 1.2, (cell_w, cell_h, arrow_w, arrow_h)
-        assert 2 * arrow_w < width_px, "arrows would collide"
         assert arrow_h <= cell_h, "arrow taller than its row"
+        curve = width_px - 2 * (arrow_w + margin)
+        assert curve >= cell_w, f"{cell_w}x{cell_h}: only {curve}px of curve left"
 
 
 def test_arrow_scales_with_the_font():
@@ -260,13 +265,38 @@ def test_arrow_scales_with_the_font():
 
     ratios = []
     for cell_w, cell_h in CELLS:
-        _arrow_w, arrow_h, _ = _arrow_box(cell_w, cell_h)
+        _arrow_w, arrow_h, _width, _margin = _arrow_box(cell_w, cell_h)
         ratios.append(arrow_h / cell_h)
         assert arrow_h < cell_h, "arrow must leave a little air in its row"
     assert max(ratios) - min(ratios) < 0.12, f"height not proportional: {ratios}"
     assert all(abs(r - ARROW_HEIGHT_RATIO) < 0.06 for r in ratios), ratios
     # the small-font case must not have regressed
     assert _arrow_box(8, 16)[:2] == (13, 12)
+
+
+def test_icons_never_touch_the_image_edge():
+    """The arrow's base is a flat shaft end; at x=0 it butts into the pane's
+    last text column and reads as touching the letter beside it."""
+    from tmeld.linkmap import GutterArrow, render_connectors
+    from tmeld.palette import MELD_BASE
+
+    for cell_w, cell_h in CELLS:
+        arrow_w, arrow_h, width_px, margin = _arrow_box(cell_w, cell_h)
+        for kind in ("push", "delete"):
+            rgba = render_connectors(
+                [], width_px, 3 * cell_h, MELD_BASE,
+                arrows=[GutterArrow(kind, False, 2.0, (0, 0, 0)),
+                        GutterArrow(kind, True, 2.0, (0, 0, 0))],
+                arrow_size=(arrow_w, arrow_h), arrow_margin=margin,
+            )
+            alpha = lambda x, y: rgba[(y * width_px + x) * 4 + 3]
+            edges = list(range(margin)) + list(range(width_px - margin, width_px))
+            for x in edges:
+                ink = max(alpha(x, y) for y in range(3 * cell_h))
+                assert ink == 0, (
+                    f"{kind} at {cell_w}x{cell_h}: column {x} is inside the "
+                    f"{margin}px margin but has ink"
+                )
 
 
 def test_arrow_is_solid_through_the_shaft():

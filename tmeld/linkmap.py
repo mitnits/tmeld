@@ -228,6 +228,7 @@ def render_connectors(
     background: Optional[str] = None,
     arrows: Iterable[GutterArrow] = (),
     arrow_size: Tuple[int, int] = (8, 12),
+    arrow_margin: int = 2,
 ) -> bytearray:
     """Rasterize connectors (and any gutter icons) to RGBA (straight alpha).
 
@@ -257,15 +258,19 @@ def render_connectors(
             canvas.fill_span(x, top - 0.5, top + 0.5, line_rgb)
             canvas.fill_span(x, bottom - 0.5, bottom + 0.5, line_rgb)
 
+    # Keep the icons clear of the image edges. The arrow's *base* is a flat
+    # shaft end; drawn at x=0 it butts straight into the neighbouring pane's
+    # last text column and reads as if it were touching the letter there.
     aw, ah = arrow_size
+    gap = max(1, arrow_margin)
     for arrow in arrows:
         if arrow.kind == "delete":
-            # The cross fills its box corner to corner; keep it off the edge.
+            # The cross fills its box corner to corner; give it the same air.
             w = max(4, aw - 2)
-            x0 = width_px - w - 1 if arrow.on_right else 1
+            x0 = width_px - w - gap if arrow.on_right else gap
             draw_delete(canvas, x0, arrow.top + 1, w, max(4, ah - 2), arrow.rgb)
         else:
-            x0 = width_px - aw if arrow.on_right else 0
+            x0 = width_px - aw - gap if arrow.on_right else gap
             draw_arrow(canvas, x0, arrow.top, aw, ah, arrow.rgb,
                        pointing_right=not arrow.on_right)
     return canvas.data

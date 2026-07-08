@@ -407,7 +407,12 @@ working context that isn't in either.
   ABSOLUTE px cap, so it was 75% of a 16px row and 41% of a 32px one; a bigger
   terminal font made the arrows shrink. Now arrow_h = cell_h * ARROW_HEIGHT_RATIO
   (0.72), clamped to cell_h-3. 8x16 is unchanged (13x12), so small fonts don't
-  regress. Text mode (Tier 1) uses the ▶ ◀ GLYPHS — one cell, cannot scale. Verify by rasterizing to PNG and looking — the
+  regress. Text mode (Tier 1) uses the ▶ ◀ GLYPHS — one cell, cannot scale.
+  Round 20: the arrow's BASE (flat shaft end) was drawn at x=0 / x=width-aw, i.e.
+  hard against the image edge, so it touched the neighbouring pane's last text
+  column. Now ARROW_EDGE_MARGIN_RATIO=0.25 of a cell (min 2px) of air on both
+  sides, cross included. arrow_w is capped on what must fit — 2*(aw+margin) plus
+  ~a cell of curve — not a blunt width_px//3, so 8x16 keeps its 13x12. Verify by rasterizing to PNG and looking — the
   numbers alone hid both the red arrow and a cross jammed against the edge.
   Gutter background is now Theme.gutter_bg = blend(page_bg, text_fg, 0.06) in
   BOTH modes (kitty composites over the cells, sixel bakes it in) — Meld's

@@ -53,6 +53,9 @@ GRAPHIC_IMAGE_COLS = 5
 # roughly this; expressed as a ratio so it tracks the terminal's font size.
 ARROW_HEIGHT_RATIO = 0.72
 
+# Air between an icon and the image edge, as a fraction of a cell's width.
+ARROW_EDGE_MARGIN_RATIO = 0.25
+
 PushCallback = Callable[[int, int, int], None]  # (src, dst, chunk_index)
 DeleteCallback = Callable[[int, int], None]  # (src, chunk_index)
 
@@ -258,12 +261,19 @@ class ActionGutter(GraphicsOverlay, Widget):
         # text row. Size it as a FRACTION of the cell, never a fixed pixel count:
         # a 13px cap looked right at a 16px cell and vanished at 32px.
         arrow_h = max(8, min(cell_h - 3, round(cell_h * ARROW_HEIGHT_RATIO)))
-        arrow_w = max(7, min(round(arrow_h * 1.1), width_px // 3))
+        # A quarter cell of air, so the shaft's flat base never lands against
+        # the neighbouring pane's text.
+        arrow_margin = max(2, round(cell_w * ARROW_EDGE_MARGIN_RATIO))
+        # Cap the width on what actually has to fit: two arrows, their margins,
+        # and about a cell of curve left visible between them.
+        room = (width_px - 2 * arrow_margin - cell_w) // 2
+        arrow_w = max(7, min(round(arrow_h * 1.1), room))
         rgba = render_connectors(
             connectors, width_px, height_px, self.theme_def,
             background=background,
             arrows=self._arrows(cell_h, arrow_h, image_rows),
             arrow_size=(arrow_w, arrow_h),
+            arrow_margin=arrow_margin,
         )
         return (
             rgba, width_px, height_px,
