@@ -403,7 +403,11 @@ working context that isn't in either.
   13x12 px — WIDER than tall (1.08). Ours was 9x12 (0.75), i.e. squeezed
   horizontally, which reads as thin; the shaft ratio (h/3) already matched.
   Fix: drive arrow_w off arrow_h (round(h*1.1)), shaft 0.36*h, head 0.5*w,
-  cross thickness min(w,h)/3.5. Verify by rasterizing to PNG and looking — the
+  cross thickness min(w,h)/3.5. Round 19: arrow_h was `min(cell_h-4, 13)` — an
+  ABSOLUTE px cap, so it was 75% of a 16px row and 41% of a 32px one; a bigger
+  terminal font made the arrows shrink. Now arrow_h = cell_h * ARROW_HEIGHT_RATIO
+  (0.72), clamped to cell_h-3. 8x16 is unchanged (13x12), so small fonts don't
+  regress. Text mode (Tier 1) uses the ▶ ◀ GLYPHS — one cell, cannot scale. Verify by rasterizing to PNG and looking — the
   numbers alone hid both the red arrow and a cross jammed against the edge.
   Gutter background is now Theme.gutter_bg = blend(page_bg, text_fg, 0.06) in
   BOTH modes (kitty composites over the cells, sixel bakes it in) — Meld's

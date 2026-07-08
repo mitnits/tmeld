@@ -224,6 +224,19 @@ def test_icon_colour_follows_the_fill_not_the_tag():
     assert theme.chunk_fg("replace") == theme.chunk["replace"].fg
 
 
+def _arrow_box(cell_w, cell_h):
+    """Mirror of ActionGutter._render_overlay's sizing."""
+    from tmeld.gutter import ARROW_HEIGHT_RATIO, GRAPHIC_IMAGE_COLS
+
+    width_px = GRAPHIC_IMAGE_COLS * cell_w
+    arrow_h = max(8, min(cell_h - 3, round(cell_h * ARROW_HEIGHT_RATIO)))
+    arrow_w = max(7, min(round(arrow_h * 1.1), width_px // 3))
+    return arrow_w, arrow_h, width_px
+
+
+CELLS = ((7, 15), (8, 16), (9, 19), (10, 20), (11, 24), (12, 26), (14, 32))
+
+
 def test_arrow_box_matches_melds_proportions():
     """Meld's meld-change-apply-right is 13x12 -- a shade wider than tall.
 
@@ -231,15 +244,29 @@ def test_arrow_box_matches_melds_proportions():
     the height so it stays chunky at every cell size, and two arrows can never
     meet in the middle of the gutter.
     """
-    from tmeld.gutter import GRAPHIC_IMAGE_COLS
-
-    for cell_w, cell_h in ((7, 15), (8, 16), (9, 19), (10, 20)):
-        width_px = GRAPHIC_IMAGE_COLS * cell_w
-        arrow_h = max(8, min(cell_h - 4, 13))
-        arrow_w = max(7, min(round(arrow_h * 1.1), width_px // 3))
+    for cell_w, cell_h in CELLS:
+        arrow_w, arrow_h, width_px = _arrow_box(cell_w, cell_h)
         assert 0.95 <= arrow_w / arrow_h <= 1.2, (cell_w, cell_h, arrow_w, arrow_h)
         assert 2 * arrow_w < width_px, "arrows would collide"
         assert arrow_h <= cell_h, "arrow taller than its row"
+
+
+def test_arrow_scales_with_the_font():
+    """A fixed pixel cap made the arrow vanish on a large font.
+
+    It was `min(cell_h - 4, 13)`: right at a 16px row, 41% of a 32px one.
+    """
+    from tmeld.gutter import ARROW_HEIGHT_RATIO
+
+    ratios = []
+    for cell_w, cell_h in CELLS:
+        _arrow_w, arrow_h, _ = _arrow_box(cell_w, cell_h)
+        ratios.append(arrow_h / cell_h)
+        assert arrow_h < cell_h, "arrow must leave a little air in its row"
+    assert max(ratios) - min(ratios) < 0.12, f"height not proportional: {ratios}"
+    assert all(abs(r - ARROW_HEIGHT_RATIO) < 0.06 for r in ratios), ratios
+    # the small-font case must not have regressed
+    assert _arrow_box(8, 16)[:2] == (13, 12)
 
 
 def test_arrow_is_solid_through_the_shaft():

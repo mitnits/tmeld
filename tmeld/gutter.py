@@ -49,6 +49,10 @@ PANE_BORDER_ROWS = 1
 # columns used to occupy, and one goes back into the curves (user, round 9).
 GRAPHIC_IMAGE_COLS = 5
 
+# Icon height as a fraction of the text row. Meld's 13x12 icon in a ~16px row is
+# roughly this; expressed as a ratio so it tracks the terminal's font size.
+ARROW_HEIGHT_RATIO = 0.72
+
 PushCallback = Callable[[int, int, int], None]  # (src, dst, chunk_index)
 DeleteCallback = Callable[[int, int], None]  # (src, chunk_index)
 
@@ -250,9 +254,10 @@ class ActionGutter(GraphicsOverlay, Widget):
         background = (
             None if self.graphics == "kitty" else self.theme_def.gutter_bg
         )
-        # Meld's icon is 13x12 -- a shade wider than tall. Sizing the box to
-        # one cell wide made it look spindly; drive the width off the height.
-        arrow_h = max(8, min(cell_h - 4, 13))
+        # Meld's icon is 13x12 -- a shade wider than tall -- and fills most of a
+        # text row. Size it as a FRACTION of the cell, never a fixed pixel count:
+        # a 13px cap looked right at a 16px cell and vanished at 32px.
+        arrow_h = max(8, min(cell_h - 3, round(cell_h * ARROW_HEIGHT_RATIO)))
         arrow_w = max(7, min(round(arrow_h * 1.1), width_px // 3))
         rgba = render_connectors(
             connectors, width_px, height_px, self.theme_def,
