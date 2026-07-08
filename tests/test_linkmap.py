@@ -38,8 +38,13 @@ def test_connectors_for_chunks_geometry():
     assert first.f1 == 4 * 16 - 16 - 1 == 47  # last pixel of previous line
     assert first.t0 == 16 and first.t1 == 31
     second = conns[1]
-    # empty left side: f1 stays == f0 (no -1 nudge)
-    assert second.f0 == second.f1 == 5 * 16 - 16
+    # Empty left side: no -1 nudge (f1 stays == f0), but the band is centred
+    # half an insert-marker below the line boundary so the connector terminates
+    # on exactly the rows the pane paints its marker on -- see
+    # test_insert_marker.test_connector_band_lands_on_the_markers_rows.
+    from tmeld.linkmap import INSERT_MARKER_PX
+    boundary = 5 * 16 - 16
+    assert second.f0 == second.f1 == boundary + INSERT_MARKER_PX / 2
     assert not second.emphasized
 
 

@@ -159,3 +159,49 @@ def test_widgets_own_disjoint_image_id_blocks(paths):
                 >= IMAGE_IDS_PER_WIDGET
 
     run(scenario())
+
+
+def test_connector_band_lands_on_the_markers_rows():
+    """A zero-height chunk's connector must terminate on the marker, not 1px above.
+
+    render_connectors nudges edges by ∓0.5 and strokes 1px bands, so the
+    degenerate band is centred half a marker below the line boundary.
+    """
+    from tmeld.linkmap import connectors_for_chunks
+
+    class Chunk:
+        def __init__(self, tag, sa, ea, sb, eb):
+            self.tag, self.start_a, self.end_a = tag, sa, ea
+            self.start_b, self.end_b = sb, eb
+
+    LH = 16
+    conn = connectors_for_chunks(
+        [Chunk("insert", 1, 1, 1, 3)], line_height_px=LH,
+        scroll_f_px=0, scroll_t_px=0, current_chunk_starts=frozenset(),
+    )[0]
+
+    # the empty side: strokes run [f0 - 0.5 - 0.5, f1 + 0.5 + 0.5]
+    band_top = conn.f0 - 1.0
+    band_bottom = conn.f1 + 1.0
+    marker_top = 1 * LH                       # pane draws the marker here
+    assert (band_top, band_bottom) == (marker_top, marker_top + INSERT_MARKER_PX)
+
+    # the side that actually has lines is untouched by the degenerate rule
+    assert (conn.t0, conn.t1) == (1 * LH, 3 * LH - 1)
+
+
+def test_non_degenerate_chunks_keep_upstreams_geometry():
+    from tmeld.linkmap import connectors_for_chunks
+
+    class Chunk:
+        def __init__(self, tag, sa, ea, sb, eb):
+            self.tag, self.start_a, self.end_a = tag, sa, ea
+            self.start_b, self.end_b = sb, eb
+
+    conn = connectors_for_chunks(
+        [Chunk("replace", 1, 3, 1, 2)], line_height_px=16,
+        scroll_f_px=0, scroll_t_px=0, current_chunk_starts=frozenset(),
+    )[0]
+    # "the last pixel of the previous line" (upstream linkmap.py:95)
+    assert (conn.f0, conn.f1) == (16, 3 * 16 - 1)
+    assert (conn.t0, conn.t1) == (16, 2 * 16 - 1)

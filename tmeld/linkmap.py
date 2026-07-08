@@ -50,6 +50,9 @@ class Connector(NamedTuple):
     emphasized: bool = False
 
 
+INSERT_MARKER_PX = 2
+
+
 def connectors_for_chunks(
     pair_chunks: Iterable,
     scroll_f_px: float,
@@ -72,6 +75,15 @@ def connectors_for_chunks(
         # "We want the last pixel of the previous line" (linkmap.py:95)
         f1 = f1 if f1 == f0 else f1 - 1
         t1 = t1 if t1 == t0 else t1 - 1
+        # A zero-height chunk terminates on the pane's insert marker, which is
+        # INSERT_MARKER_PX tall and starts at the line boundary. render_connectors
+        # nudges the edges by ∓0.5 and strokes 1px bands, so centring the
+        # degenerate band half a marker below the boundary makes it cover
+        # exactly [y, y + INSERT_MARKER_PX] -- the marker's own rows.
+        if f1 == f0:
+            f0 = f1 = f0 + INSERT_MARKER_PX / 2.0
+        if t1 == t0:
+            t0 = t1 = t0 + INSERT_MARKER_PX / 2.0
         result.append(Connector(
             chunk.tag, f0, f1, t0, t1,
             emphasized=(chunk.start_a, chunk.start_b) in current_chunk_starts,
@@ -242,9 +254,6 @@ def render_chunk_map(
 
 
 # --- kitty graphics protocol -------------------------------------------------
-
-
-INSERT_MARKER_PX = 2
 
 
 def render_insert_marker(width_px: int, rgb: RGB) -> bytearray:

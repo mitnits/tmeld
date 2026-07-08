@@ -22,6 +22,10 @@ import {
 } from "./scrollsync.js";
 
 const REDIFF_DEBOUNCE = 250;
+// Thickness of the zero-height-chunk marker. Must match `.cm-line.bm-mark`'s
+// box-shadow in bmeld.css: the connector's degenerate band has to land on
+// exactly the rows the pane paints.
+const MARK_PX = 2;
 const CHUNK_TAGS = ["insert", "delete", "replace", "conflict", "error"];
 
 // meld/vc/_vc.py state constants -> CSS class suffixes (PARITY.md §2)
@@ -434,7 +438,16 @@ class FileTab {
   // band straddling the boundary it points at.
   chunkEdges(view, start, end, offset) {
     const top = this.snapY(this.lineScreenY(view, start)) - offset;
-    if (end <= start) return [top - 0.5, top + 0.5];
+    if (end <= start) {
+      // Zero-height chunk: the pane draws a MARK_PX line here instead of a
+      // fill, and the connector must terminate on precisely those rows. At EOF
+      // the marker hangs off the bottom of the last line (`.bm-mark-end`), so
+      // the band grows upwards instead.
+      const atEof = start >= view.state.doc.lines;
+      return atEof
+        ? [top - MARK_PX + 0.5, top - 0.5]
+        : [top + 0.5, top + MARK_PX - 0.5];
+    }
     const bottom = this.snapY(this.lineScreenY(view, end)) - offset;
     if (bottom - top < 1) {
       const mid = (top + bottom) / 2;
