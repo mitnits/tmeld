@@ -447,6 +447,17 @@ working context that isn't in either.
   TextArea.action_cut already guards read_only, so no extra check. NOT added to
   bmeld: the browser already routes ctrl+z/x/c to the editor natively, and
   alt+<letter> is a menu accelerator there.
+- Slanted tab caps (user, round 13): ◢ (U+25E2) / ◣ (U+25E3) bracket each tab
+  label, drawn as `[tab_bg on gutter_bg]` so the cell is bar-coloured with a
+  triangle of the tab's own colour — the tab widens toward the bottom, like a
+  real tab. They cost NO width: `Tab { padding: 0 }` gives up the two cells
+  Textual reserved. Caps are tinted by ACTIVE state, and Tab labels are static,
+  so on_tabbed_content_tab_activated calls _refresh_tab_labels() to rebuild all
+  of them. _tab_is_active/_refresh_tab_labels guard NoMatches (compose-time and
+  just-closed tabs). CAVEAT: U+25E2/E3 are East-Asian *Ambiguous* width — 1 cell
+  in a C/UTF-8 locale, 2 in a CJK one. Same class as the ▶ ◀ gutter arrows we
+  already ship, so no new risk, but it is the reason not to reach for fancier
+  glyphs.
 - Still open (bmeld): conflict 3-way FROM the VC view (spec ready,
   untested in browser), tier-3 relay transport, Playwright job in CI,
   favicon, dark theme toggle (palette plumbing exists), folder copy/

@@ -21,6 +21,7 @@ import sys
 from typing import List, Optional, Sequence, Tuple
 
 from textual.app import App, ComposeResult
+from textual.css.query import NoMatches
 from textual.markup import escape
 from textual.binding import Binding
 from textual import events
@@ -98,6 +99,8 @@ class TmeldApp(App):
         display: none;
     }
     Tab {
+        /* the slanted caps occupy the cells Tab reserves for padding */
+        padding: 0;
         background: $tmeld-tab-inactive;
         color: $tmeld-dim;
     }
@@ -232,14 +235,48 @@ class TmeldApp(App):
     def merged_saved(self) -> bool:
         return self.view.merged_saved
 
+    # Slanted tab caps: the tab widens toward the bottom, as tabs do. Each cap
+    # cell is bar-coloured with a triangle of the tab's own colour, so the pair
+    # reads as the sloping edge of the sheet. They replace Tab's `padding: 0 1`
+    # rather than adding width.
+    TAB_CAP_LEFT = "◢"   # U+25E2 black lower right triangle
+    TAB_CAP_RIGHT = "◣"  # U+25E3 black lower left triangle
+
+    def _tab_is_active(self, tab_id: str) -> bool:
+        try:
+            return self.query_one(TabbedContent).active == tab_id
+        except NoMatches:
+            return False
+
     def _tab_label(self, view: ComparisonView) -> str:
         """Tab title markup plus a click-to-close ✕ (Meld tabs have one
         too). Textual parses the @click action from the markup."""
         tab_id = self._tab_ids[view]
+        theme = self.theme_def
+        bar = theme.gutter_bg
+        tab = (
+            (theme.page_bg or ("#000000" if theme.dark else "#ffffff"))
+            if self._tab_is_active(tab_id) else theme.tab_inactive_bg
+        )
+        cap = f"[{tab} on {bar}]"
         return (
+            f"{cap}{self.TAB_CAP_LEFT}[/]"
             f"{escape(view.tab_label)} "
             f"[dim @click=app.close_tab_by_id('{tab_id}')]✕[/]"
+            f"{cap}{self.TAB_CAP_RIGHT}[/]"
         )
+
+    def _refresh_tab_labels(self) -> None:
+        """Caps are tinted by active state, so every label is rebuilt on switch."""
+        try:
+            tabs = self.query_one(TabbedContent)
+        except NoMatches:
+            return
+        for view, tab_id in self._tab_ids.items():
+            try:
+                tabs.get_tab(tab_id).label = self._tab_label(view)
+            except Exception:  # tab already closed
+                continue
 
     def get_css_variables(self) -> dict:
         """Expose the Meld palette to App.CSS as $tmeld-* variables."""
@@ -297,6 +334,7 @@ class TmeldApp(App):
         if previous is not view:
             previous.on_tab_hidden()
         self.sub_title = view.status_text
+        self._refresh_tab_labels()
         view.focus_default()
         view.on_tab_shown()
 

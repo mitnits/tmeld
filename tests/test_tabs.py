@@ -142,12 +142,13 @@ def test_tab_labels_shorten_and_mark_dirty(pair):
         async with app.run_test() as pilot:
             await pilot.pause()
             tabs = app.query_one(TabbedContent)
-            assert str(tabs.get_tab("tab0").label) == "a.txt — b.txt ✕"
+            # the slanted caps bracket the label (they replace Tab's padding)
+            assert str(tabs.get_tab("tab0").label) == "◢a.txt — b.txt ✕◣"
             app.panes[0].focus()
             await pilot.pause()
             await pilot.press("Z")
             await pilot.pause()
-            assert str(tabs.get_tab("tab0").label) == "a.txt* — b.txt ✕"
+            assert str(tabs.get_tab("tab0").label) == "◢a.txt* — b.txt ✕◣"
 
     run(scenario())
 
@@ -395,3 +396,53 @@ def test_underline_is_gone_and_its_row_reclaimed(pair):
             assert strip.size.height == 1, "tab strip should be one row"
 
     run(scenario())
+
+
+def test_tab_caps_are_the_tab_colour_on_the_bar(pair):
+    """A cap cell is bar-coloured with a triangle of the tab's own colour, so
+    the pair reads as the sloping edge of the sheet. Re-tinted on switch."""
+    from textual.widgets import TabbedContent
+
+    diffs = [(pair([f"l{i}"], [f"r{i}"]), None) for i in range(2)]
+
+    def caps(app):
+        row = app.screen._compositor.render_strips()[0]
+        return [(s.text, s.style.color.name, s.style.bgcolor.name)
+                for s in row if s.text in ("◢", "◣")]
+
+    async def scenario(theme_name):
+        app = TmeldApp(diffs=diffs, theme_name=theme_name)
+        async with app.run_test(size=(80, 8)) as pilot:
+            await pilot.pause()
+            theme = app.theme_def
+            bar = theme.gutter_bg
+            page = theme.page_bg
+            dull = theme.tab_inactive_bg
+
+            got = caps(app)
+            assert len(got) == 4, got
+            assert all(bg == bar for _, _, bg in got), "caps must sit on the bar"
+            # first tab active: its caps carry the page colour
+            assert [fg for _, fg, _ in got] == [page, page, dull, dull]
+
+            app.query_one(TabbedContent).active = "tab1"
+            await pilot.pause()
+            await pilot.pause()
+            got = caps(app)
+            assert [fg for _, fg, _ in got] == [dull, dull, page, page], \
+                "caps did not follow the active tab"
+
+    for name in ("meld-base", "meld-dark"):
+        run(scenario(name))
+
+
+def test_caps_cost_no_width():
+    """They occupy the cells Tab's `padding: 0 1` used, not extra ones."""
+    from rich.cells import cell_len
+    from tmeld.app import TmeldApp
+
+    assert cell_len(TmeldApp.TAB_CAP_LEFT) == 1
+    assert cell_len(TmeldApp.TAB_CAP_RIGHT) == 1
+    css = TmeldApp.CSS
+    tab_rule = css[css.index("    Tab {"):css.index("    Tab:hover")]
+    assert "padding: 0;" in tab_rule, tab_rule
