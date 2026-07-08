@@ -221,6 +221,12 @@ body {
   background: #fafafa;
 }
 #hints { color: #999; margin-left: auto; }
+#build {
+  color: #bbb;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  white-space: nowrap;
+}
 #done {
   font-size: 11px;
   padding: 3px 14px;

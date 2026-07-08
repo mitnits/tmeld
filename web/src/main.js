@@ -928,6 +928,11 @@ ws.onmessage = (event) => {
       root.setProperty(`--bm-${tag}-fg`, c.fg);
       root.setProperty(`--bm-${tag}-emph`, c.emphasis);
     }
+    const build = document.getElementById("build");
+    if (build && msg.version) {
+      build.textContent = `bmeld ${msg.version} · ${msg.build}`;
+      build.title = `tmeld ${msg.version}, asset build ${msg.build}`;
+    }
     for (const tabData of msg.tabs) addTab(tabData);
     document.getElementById("done").addEventListener("click", finish);
     window.addEventListener("resize", () => {

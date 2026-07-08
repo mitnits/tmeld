@@ -12,6 +12,7 @@ the compared directories, which is the point of a dir comparison).
 """
 
 import asyncio
+import hashlib
 import itertools
 import json
 import logging
@@ -21,6 +22,7 @@ from typing import Dict, List, Optional, Sequence, Union
 
 from aiohttp import WSMsgType, web
 
+from tmeld import __version__
 from tmeld.comparison import Comparison
 from tmeld.dircompare import DirComparison
 from tmeld.palette import THEMES, Theme
@@ -37,6 +39,18 @@ from tmeld.web.protocol import (
 log = logging.getLogger("bmeld")
 
 STATIC_DIR = Path(__file__).parent / "static"
+
+
+def build_id() -> str:
+    """Short hash of the assets actually on disk.
+
+    Shown in the footer and used to bust the browser cache, so "am I running
+    the build I think I am?" is answerable by looking at the page.
+    """
+    h = hashlib.sha256()
+    for name in ("bmeld.js", "bmeld.css", "index.html"):
+        h.update((STATIC_DIR / name).read_bytes())
+    return h.hexdigest()[:8]
 
 CSP = (
     "default-src 'self'; img-src 'self' data:; "
@@ -135,6 +149,8 @@ class BmeldSession:
             "type": "init",
             "tabs": [self._tab_payload(t) for t in self.tab_order],
             "palette": palette_payload(self.theme),
+            "version": __version__,
+            "build": build_id(),
         }
         for tab_id in list(self.tab_order):
             comparison = self.tabs[tab_id]
@@ -304,12 +320,22 @@ def make_app(session: BmeldSession, token: str) -> web.Application:
         if request.match_info.get("token") != token:
             raise web.HTTPNotFound()
 
+    build = build_id()
+
     async def index(request: web.Request) -> web.Response:
         check(request)
         html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        # Version the asset URLs: a stale bundle can then never be served from
+        # the browser cache, and the footer's build id always names the code
+        # that is actually running.
+        html = html.replace("/assets/bmeld.js", f"/assets/bmeld.js?v={build}")
+        html = html.replace("/assets/bmeld.css", f"/assets/bmeld.css?v={build}")
         return web.Response(
             text=html, content_type="text/html",
-            headers={"Content-Security-Policy": CSP},
+            headers={
+                "Content-Security-Policy": CSP,
+                "Cache-Control": "no-store",
+            },
         )
 
     async def websocket(request: web.Request) -> web.WebSocketResponse:

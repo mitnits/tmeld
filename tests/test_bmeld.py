@@ -337,3 +337,50 @@ def test_vc_revert(repo):
 
     run(scenario())
     assert (repo / "a.py").read_text() == "original\n"
+
+
+def test_index_versions_asset_urls_and_reports_build(three):
+    """A stale bundle must be unservable, and the running build identifiable."""
+    from tmeld import __version__
+    from tmeld.web.server import build_id
+
+    async def scenario():
+        session = make_session(three)
+        client = await client_for(session)
+        try:
+            resp = await client.get(f"/t/{TOKEN}")
+            assert resp.status == 200
+            assert resp.headers["Cache-Control"] == "no-store"
+            html = await resp.text()
+
+            build = build_id()
+            assert len(build) == 8 and int(build, 16) >= 0
+            # every asset URL carries the build id, so the browser cannot
+            # reuse a cached copy from a previous build
+            assert f"/assets/bmeld.js?v={build}" in html
+            assert f"/assets/bmeld.css?v={build}" in html
+            assert 'href="/assets/bmeld.css"' not in html
+
+            ws = await client.ws_connect(f"/ws/{TOKEN}")
+            init = await recv(ws)
+            assert init["version"] == __version__
+            assert init["build"] == build
+        finally:
+            await client.close()
+
+    run(scenario())
+
+
+def test_build_id_tracks_asset_contents(tmp_path, monkeypatch):
+    """Change a served asset, get a different build id."""
+    import tmeld.web.server as srv
+
+    before = srv.build_id()
+    css = srv.STATIC_DIR / "bmeld.css"
+    original = css.read_bytes()
+    try:
+        css.write_bytes(original + b"\n/* touched */\n")
+        assert srv.build_id() != before
+    finally:
+        css.write_bytes(original)
+    assert srv.build_id() == before
