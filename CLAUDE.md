@@ -426,6 +426,19 @@ working context that isn't in either.
   matching bmeld. Scrollbars themed off theme.gutter_bg/unknown_fg (were black).
   Fixed while there: the text gutter drew push arrows on row 0, which lines up
   with the panes' title border and maps to the line ABOVE the viewport.
+- Tab strip polish (user, round 11): bar = theme.gutter_bg, ACTIVE tab =
+  theme.page_bg (reads as the sheet you're looking at), INACTIVE =
+  theme.tab_inactive_bg = blend(gutter_bg, text_fg, 0.08) — expressed as a
+  blend toward the text colour, not "darker", so it darkens on meld-base and
+  LIFTS on meld-dark while page_bg stays the odd one out. Colours reach App.CSS
+  via TmeldApp.get_css_variables() as $tmeld-{page,gutter,tab-inactive,text,dim};
+  theme_def must therefore be assigned BEFORE super().__init__() (App.__init__
+  parses CSS). Textual's Underline widget is display:none and Tabs height 2->1,
+  reclaiming a terminal row — the active tab's colour is unmistakable on its own.
+  DECIDED AGAINST drawing the tab highlight with kitty/sixel: graphics only earn
+  their keep for SUB-CELL geometry (bezier curves, 1px chunk lines, 2px insert
+  markers). A tab highlight is a solid rect on cell boundaries — cells render it
+  exactly, for free, on every terminal; sixel would also erase the tab's glyphs.
 - Still open (bmeld): conflict 3-way FROM the VC view (spec ready,
   untested in browser), tier-3 relay transport, Playwright job in CI,
   favicon, dark theme toggle (palette plumbing exists), folder copy/

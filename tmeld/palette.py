@@ -74,6 +74,16 @@ class Theme:
             fill = blend(fill, self.emphasis_color, self.emphasis_alpha)
         return fill
 
+    @property
+    def tab_inactive_bg(self) -> str:
+        """One more step away from the page than the gutter is.
+
+        Expressed as a blend toward the text colour rather than "darker", so it
+        works both ways: on a light scheme it darkens, on a dark one it lifts.
+        Either way the active tab (page_bg) stays the odd one out.
+        """
+        return blend(self.gutter_bg, self.text_fg, 0.08)
+
     def chunk_fg(self, tag: str) -> str:
         """Foreground for a gutter icon sitting on this chunk's fill.
 

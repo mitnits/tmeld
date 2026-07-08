@@ -85,14 +85,33 @@ class TmeldApp(App):
     TabbedContent.single Tabs {
         display: none;
     }
-    /* The underline alone is easy to miss; give the active tab its own
-       background (user round 6) */
+    /* Tab strip: the bar is the gutter's grey, the active tab is the pane's
+       page background (so it reads as the sheet you are looking at), and an
+       inactive tab sits one step further from the page. Meld's own notebook
+       does the same. The active tab's colour is unmistakable, so Textual's
+       Underline is dropped -- which also buys back a terminal row. */
+    Tabs, ContentTabs {
+        height: 1;
+        background: $tmeld-gutter;
+    }
+    Tabs Underline, ContentTabs Underline {
+        display: none;
+    }
+    Tab {
+        background: $tmeld-tab-inactive;
+        color: $tmeld-dim;
+    }
+    Tab:hover {
+        background: $tmeld-gutter;
+        color: $tmeld-text;
+    }
     Tab.-active {
-        background: #3d3d3d;
+        background: $tmeld-page;
+        color: $tmeld-text;
         text-style: bold;
     }
     Tab.-active:hover {
-        background: #4a4a4a;
+        background: $tmeld-page;
     }
     TabArrows {
         layer: tabarrows;
@@ -100,7 +119,8 @@ class TmeldApp(App):
         width: 4;
         height: 1;
         content-align: right middle;
-        color: $text-muted;
+        background: $tmeld-gutter;
+        color: $tmeld-dim;
         display: none;
     }
     DiffPane {
@@ -156,8 +176,10 @@ class TmeldApp(App):
         cell_px: Optional[Tuple[int, int]] = None,
         show_line_numbers: bool = False,
     ):
-        super().__init__()
+        # Before super(): App.__init__ parses CSS, and get_css_variables()
+        # feeds it the palette.
         self.theme_def = THEMES[theme_name]
+        super().__init__()
         # Meld hides line numbers by default; the status bar carries the
         # cursor position instead.
         self.show_line_numbers = show_line_numbers
@@ -218,6 +240,19 @@ class TmeldApp(App):
             f"{escape(view.tab_label)} "
             f"[dim @click=app.close_tab_by_id('{tab_id}')]✕[/]"
         )
+
+    def get_css_variables(self) -> dict:
+        """Expose the Meld palette to App.CSS as $tmeld-* variables."""
+        variables = super().get_css_variables()
+        theme = self.theme_def
+        variables.update({
+            "tmeld-page": theme.page_bg or ("#000000" if theme.dark else "#ffffff"),
+            "tmeld-gutter": theme.gutter_bg,
+            "tmeld-tab-inactive": theme.tab_inactive_bg,
+            "tmeld-text": theme.text_fg,
+            "tmeld-dim": theme.dimmed_fg,
+        })
+        return variables
 
     def compose(self) -> ComposeResult:
         single = "single" if len(self.views) == 1 else ""

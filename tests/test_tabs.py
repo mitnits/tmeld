@@ -345,14 +345,53 @@ def test_tab_arrows_hidden_when_tabs_fit(pair):
     run(scenario())
 
 
-def test_active_tab_background_highlight(pair):
+def test_tab_colours_follow_the_palette(pair):
+    """Active tab = the page you are looking at; inactive = a step away from it.
+
+    The bar itself is the gutter's grey. Asserted as relationships rather than
+    hexes so both themes stay honest.
+    """
+    from textual.color import Color
+    from textual.widgets import Tab
+
     diffs = [(pair([f"l{i}"], [f"r{i}"]), None) for i in range(3)]
+
+    async def scenario(theme_name):
+        app = TmeldApp(diffs=diffs, theme_name=theme_name)
+        async with app.run_test(size=(100, 20)) as pilot:
+            await pilot.pause()
+            theme = app.theme_def
+            tabs = list(app.query(Tab))
+            active = [t for t in tabs if t.has_class("-active")]
+            inactive = [t for t in tabs if not t.has_class("-active")]
+            assert active and inactive
+
+            page = Color.parse(theme.page_bg)
+            assert active[0].styles.background == page
+            assert inactive[0].styles.background == Color.parse(theme.tab_inactive_bg)
+            # ...and the two are actually distinguishable
+            assert active[0].styles.background != inactive[0].styles.background
+            # the strip behind them is the gutter's grey
+            strip = app.query_one("ContentTabs")
+            assert strip.styles.background == Color.parse(theme.gutter_bg)
+
+    for name in ("meld-base", "meld-dark"):
+        run(scenario(name))
+
+
+def test_underline_is_gone_and_its_row_reclaimed(pair):
+    """The active tab's colour says enough; the Underline widget cost a row."""
+    from textual.widgets._tabs import Underline
+
+    diffs = [(pair([f"l{i}"], [f"r{i}"]), None) for i in range(2)]
 
     async def scenario():
         app = TmeldApp(diffs=diffs)
         async with app.run_test(size=(100, 20)) as pilot:
             await pilot.pause()
-            svg = app.export_screenshot()
-            assert "#3d3d3d" in svg  # active tab background
+            for underline in app.query(Underline):
+                assert underline.display is False
+            strip = app.query_one("ContentTabs")
+            assert strip.size.height == 1, "tab strip should be one row"
 
     run(scenario())
