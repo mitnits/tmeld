@@ -1,3 +1,15 @@
+tmeld (0.5.0) unstable; urgency=medium
+
+  * bmeld: Meld served to a browser (also `tmeld --web`); now shipped in the
+    package, depending on the system python3-aiohttp.
+  * One shared command line for tmeld and bmeld (--web, --port, --bind).
+  * TUI: Esc quits, per-pane overview maps, left-hand scrollbar, read-only
+    /dev/null handling, tab-strip contrast fix, gutter icons drawn into the
+    linkmap. Line numbers off by default.
+  * maint/mkdeb.sh stamps builds so rebuilds upgrade in place.
+
+ -- mitnits <alexa.mitnitski@gmail.com>  Wed, 09 Jul 2026 12:00:00 +0300
+
 tmeld (0.4.0) unstable; urgency=medium
 
   * First Debian packaging of tmeld.

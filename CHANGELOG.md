@@ -1,5 +1,52 @@
 # Changelog
 
+## 0.5.0 — 2026-07-09
+
+### bmeld — Meld in your browser
+
+- `bmeld a b` (or `tmeld --web a b`) serves the comparison to a browser:
+  the same vendored engine, palette and keybindings, rendered by CodeMirror
+  with real SVG linkmap curves. Files, folders and the version-control view
+  all open as tabs; the process keeps the git-mergetool exit contract.
+- `--bind ADDR` / `--advertise HOST` to reach it from other machines (loopback
+  by default, with a warning when you open it wider). `--port` implies `--web`.
+- One press of Ctrl-C exits cleanly even with a browser attached; a cache-busted
+  build id in the footer tells you which bundle you are running.
+
+### One command line
+
+- `tmeld` and `bmeld` now share a single parser and validation. `--web` selects
+  the browser and `--port` implies it; options that belong to the other
+  front-end are refused rather than silently ignored.
+
+### Terminal UI
+
+- Esc quits (warning once if there are unsaved edits); a ✕ closes the lone
+  comparison when the tab strip is hidden.
+- Read-only panes get Meld's treatment: the push arrow toward them becomes a
+  delete (✕), a 🔒 marks the file, and a `/dev/null` side (as p4 and git pass
+  for an added or deleted file) is read-only automatically.
+- One overview map per pane, so the two sides drift apart as they diverge; the
+  first pane's scrollbar moves to the far left, clear of the linkmap.
+- Line numbers are hidden by default, matching Meld; the status bar carries
+  `Ln, Col`. `--show-line-numbers` restores them.
+- Graphics mode: the gutter arrows are Meld's own icons, drawn into the linkmap
+  and scaled with the font; the insert marker (Meld's thin line for a one-sided
+  change) is drawn under kitty; the channel takes Meld's grey.
+- Tab strip: slanted caps, palette colours meeting WCAG contrast, and one fewer
+  row (the underline is gone).
+
+### Packaging
+
+- The Debian package now ships `bmeld` too, depends on the system aiohttp rather
+  than bundling it (staying `Architecture: all`), and `maint/mkdeb.sh` stamps
+  each build so rebuilds upgrade in place.
+
+### Fixes
+
+- Diff-chunk fills now cover the full scrollable width, not just the viewport.
+- Empty panes are no longer reported as modified.
+
 ## 0.4.0 — 2026-07-07
 
 - Version-control view: `tmeld .` shows working-copy status (git
