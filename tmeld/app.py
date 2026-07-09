@@ -199,6 +199,10 @@ class TmeldApp(App):
         Binding("ctrl+alt+pagedown", "next_tab", "Next tab", show=False),
         Binding("ctrl+alt+pageup", "previous_tab", "Prev tab", show=False),
         Binding("ctrl+q", "quit", "Quit", priority=True),
+        # Esc quits, guarding unsaved edits like close does. NOT priority, so a
+        # modal (the commit dialog) still gets Esc first to cancel itself, and
+        # so the focused pane keeps Esc-prefixed keys (Alt+X arrives as ESC x).
+        Binding("escape", "escape_quit", "Quit", show=False),
     ]
 
     def __init__(
@@ -236,6 +240,7 @@ class TmeldApp(App):
         self._tab_counter = len(self.views)
         self._active_view = self.views[0]
         self._close_pending: Optional[ComparisonView] = None
+        self._quit_pending = False
 
     # The active comparison; also the delegation target for the test
     # suite's app.panes / app.comparison / ... shorthands.
@@ -508,6 +513,28 @@ class TmeldApp(App):
 
     def _clear_close_pending(self) -> None:
         self._close_pending = None
+
+    def action_escape_quit(self) -> None:
+        """Esc: quit, but never silently drop unsaved work.
+
+        A dirty tab anywhere warns once and waits for a second Esc, the same
+        confirm-by-repeat close uses. The exit status is unchanged, so an
+        abandoned 3-way merge still fails the mergetool contract.
+        """
+        dirty = any(any(view.dirty) for view in self.views)
+        if dirty and not self._quit_pending:
+            self._quit_pending = True
+            self.notify(
+                "Unsaved changes — press Esc again to quit",
+                severity="warning",
+                timeout=3,
+            )
+            self.set_timer(3, self._clear_quit_pending)
+            return
+        self.exit()
+
+    def _clear_quit_pending(self) -> None:
+        self._quit_pending = False
 
     def action_next_tab(self) -> None:
         self.query_one(Tabs).action_next_tab()

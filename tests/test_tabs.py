@@ -572,3 +572,93 @@ def test_corner_button_clears_the_overview_strips(pair, tmp_path):
         d.mkdir()
         (d / "f.txt").write_text("x\n", encoding="utf-8")
     run(scenario([str(left), str(right)], 0))   # folder view: no strips
+
+
+def test_escape_quits_when_clean(pair):
+    async def scenario():
+        app = TmeldApp(pair(["a"], ["b"]))
+        async with app.run_test(size=(80, 10)) as pilot:
+            await pilot.pause()
+            await pilot.press("escape")
+            await pilot.pause()
+            assert not app.is_running
+
+    run(scenario())
+
+
+def test_escape_warns_before_discarding_unsaved_edits(pair):
+    """Esc must not silently drop work: first press warns, second quits."""
+    async def scenario():
+        app = TmeldApp(pair(["a"], ["b"]))
+        async with app.run_test(size=(80, 10)) as pilot:
+            await pilot.pause()
+            app.panes[0].focus()
+            await pilot.pause()
+            await pilot.press("X")               # dirty the buffer
+            await pilot.pause()
+            assert any(app.views[0].dirty)
+
+            await pilot.press("escape")          # first: warn only
+            await pilot.pause()
+            assert app.is_running, "one Esc discarded unsaved edits"
+            assert app._quit_pending
+
+            await pilot.press("escape")          # second: quit
+            await pilot.pause()
+            assert not app.is_running
+
+    run(scenario())
+
+
+def test_escape_quit_keeps_the_mergetool_exit_code(pair, tmp_path):
+    """An abandoned 3-way merge must still fail (exit 1)."""
+    three = []
+    for name in ("local", "base", "remote"):
+        p = tmp_path / name
+        p.write_text(f"{name}\n", encoding="utf-8")
+        three.append(str(p))
+
+    async def scenario():
+        app = TmeldApp([three[0], three[1], three[2]])
+        async with app.run_test(size=(90, 12)) as pilot:
+            await pilot.pause()
+            await pilot.press("escape")          # clean tree -> quits at once
+            await pilot.pause()
+            return app
+
+    app = run(scenario())
+    assert app.exit_status() == 1
+
+
+def test_escape_cancels_a_modal_instead_of_quitting(tmp_path):
+    """The commit dialog binds Esc; the app binding is non-priority so the
+    modal wins. Esc there must cancel the dialog, not exit tmeld."""
+    import subprocess
+    from textual.screen import ModalScreen
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    sh = lambda *c: subprocess.run(c, cwd=repo, check=True, capture_output=True)
+    sh("git", "init", "-q")
+    sh("git", "config", "user.email", "t@t")
+    sh("git", "config", "user.name", "t")
+    (repo / "f").write_text("x\n", encoding="utf-8")
+    sh("git", "add", "-A")
+    sh("git", "commit", "-qm", "init")
+    (repo / "f").write_text("y\n", encoding="utf-8")
+
+    async def scenario():
+        app = TmeldApp([str(repo)])
+        async with app.run_test(size=(80, 14)) as pilot:
+            await pilot.pause()
+            await pilot.pause()
+            await pilot.press("c")               # open the commit modal
+            await pilot.pause()
+            assert isinstance(app.screen, ModalScreen), "commit dialog didn't open"
+
+            await pilot.press("escape")
+            await pilot.pause()
+            assert app.is_running, "Esc quit the app instead of the dialog"
+            assert not isinstance(app.screen, ModalScreen), "dialog still open"
+
+    run(scenario())

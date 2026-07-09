@@ -71,7 +71,7 @@ installs over the previous one instead of being refused as the same version
 | Next / previous pane | Alt+PgDn / Alt+PgUp |
 | Close tab / quit on the last one | Ctrl+W (twice if unsaved), or the ✕ |
 | Next / previous tab | Ctrl+Alt+PgDn / Ctrl+Alt+PgUp |
-| Quit | Ctrl+Q |
+| Quit | Esc, Ctrl+Q (Esc warns once if unsaved) |
 
 Gutter arrows between panes are clickable (they push the chunk); the
 right-edge map is click-to-jump. On macOS terminals, set "Option as

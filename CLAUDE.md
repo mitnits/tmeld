@@ -550,6 +550,15 @@ working context that isn't in either.
   dir/VC view — so it sits on the panes' title rule instead.
   Footer left alone: it already overflows at 96 cols, so a 10th binding would
   fall off the end rather than teach anyone anything.
+- Esc quits (user, round 23). Guards unsaved work like close does: first Esc
+  on any dirty tab warns, second quits (self._quit_pending, 3s timer). The
+  binding is NOT priority — that is load-bearing: CommitScreen (VcView) binds
+  escape to cancel, so a non-priority app binding lets the modal get Esc first
+  and dismiss itself instead of quitting; and the focused pane keeps Esc-prefixed
+  keys (Alt+X arrives as ESC x, disambiguated by Textual's timer). exit_status()
+  is unchanged, so Esc-quitting an unsaved 3-way still returns 1 (mergetool
+  failure). Tests cover clean-quit, dirty warn-then-quit, the modal-cancel path,
+  and the exit code.
 - Still open (bmeld): conflict 3-way FROM the VC view (spec ready,
   untested in browser), tier-3 relay transport, Playwright job in CI,
   favicon, dark theme toggle (palette plumbing exists), folder copy/
