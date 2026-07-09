@@ -15,7 +15,7 @@ Every tab-scoped message carries a `tab` id.
 
 from typing import List, Optional, Sequence
 
-from tmeld.comparison import Comparison
+from tmeld.comparison import Comparison, devnull_panes
 from tmeld.dircompare import DirComparison, DirEntry
 from tmeld.misc import shorten_names
 from tmeld.palette import Theme
@@ -56,6 +56,8 @@ def file_tab_payload(
 ) -> dict:
     n = comparison.num_panes
     labels = list(labels) if labels else [None] * n
+    # A /dev/null side (p4/git's "absent file") is read-only: no content to save.
+    readonly = sorted(set(readonly) | devnull_panes(comparison.paths))
     return {
         "id": tab_id,
         "kind": "file",

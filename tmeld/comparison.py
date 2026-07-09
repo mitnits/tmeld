@@ -5,6 +5,7 @@ inline_ranges dictionaries produced here; tags and chunk boundaries come
 straight from the vendored Meld engine.
 """
 
+import os
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from tmeld._vendor.meld.matchers.diffutil import Differ, opcode_reverse
@@ -21,6 +22,22 @@ InlineRanges = Dict[int, List[Tuple[int, int]]]
 def read_text(path: str) -> str:
     with open(path, encoding="utf-8", errors="replace", newline="") as f:
         return f.read()
+
+
+def is_devnull(path: str) -> bool:
+    """True for the null device, which p4 and git pass as the absent side of
+    an add or delete. It has no content to save, so its pane is read-only."""
+    if path in ("/dev/null", os.devnull):
+        return True
+    try:
+        return os.path.realpath(path) == os.path.realpath(os.devnull)
+    except OSError:
+        return False
+
+
+def devnull_panes(paths: Sequence[str]) -> frozenset:
+    """Indices of the /dev/null sides of a comparison."""
+    return frozenset(i for i, p in enumerate(paths) if is_devnull(p))
 
 
 class Comparison:

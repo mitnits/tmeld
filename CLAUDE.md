@@ -559,6 +559,18 @@ working context that isn't in either.
   is unchanged, so Esc-quitting an unsaved 3-way still returns 1 (mergetool
   failure). Tests cover clean-quit, dirty warn-then-quit, the modal-cancel path,
   and the exit code.
+- /dev/null read-only + empty-side dirty bug (user, p4 difftool round 24). p4
+  (and git difftool) pass /dev/null as the absent side of an add/delete. TWO
+  bugs: (1) on_text_area_changed compared pane.text.split("\n") to
+  comparison.lines[i] — but "".splitlines() is [] (what Comparison stores) while
+  "".split("\n") is [''], so EVERY empty pane read as modified forever (Save
+  always on). Fixed: compare pane.text == "\n".join(lines) — the pane always
+  holds exactly that. Same pattern fixed in action_merge_all. bmeld dodged it
+  (only marks dirty on a real docChanged). (2) /dev/null now read-only in BOTH
+  front-ends via comparison.devnull_panes(): FileDiffView folds it into
+  self.readonly, file_tab_payload into its readonly list. is_devnull() checks
+  the literal path and realpath==os.devnull. An empty REAL file stays editable —
+  only /dev/null is special.
 - Still open (bmeld): conflict 3-way FROM the VC view (spec ready,
   untested in browser), tier-3 relay transport, Playwright job in CI,
   favicon, dark theme toggle (palette plumbing exists), folder copy/

@@ -23,7 +23,7 @@ from textual.widgets import TextArea
 
 from tmeld.chunkmap import ChunkMap
 from tmeld.comparisonview import ComparisonView
-from tmeld.comparison import Comparison
+from tmeld.comparison import Comparison, devnull_panes
 from tmeld.gutter import ActionGutter
 from tmeld.misc import shorten_names
 from tmeld.palette import Theme
@@ -71,7 +71,11 @@ class FileDiffView(ComparisonView):
         # Display-only overrides (the VC view compares against unlabeled
         # read-only temp files, like upstream vcview.run_diff)
         self.labels = list(labels) if labels else [None] * self.num_panes
-        self.readonly = tuple(readonly)
+        # A /dev/null side (p4/git's "absent file") can't be edited or saved,
+        # so it is read-only on top of anything the caller asked for.
+        self.readonly = tuple(sorted(
+            set(readonly) | devnull_panes(self.comparison.paths)
+        ))
         self.tab_title = tab_title
         self.panes: List[DiffPane] = []
         self.gutters: List[ActionGutter] = []
@@ -270,7 +274,13 @@ class FileDiffView(ComparisonView):
         # Programmatic loads/pushes keep comparison.lines in sync before
         # this message arrives; only genuine divergence marks dirty and
         # schedules a re-diff (chunk actions mark dirty explicitly).
-        if pane.text.split("\n") == self.comparison.lines[i]:
+        #
+        # Compare the joined text, not pane.text.split("\n"): the pane always
+        # holds "\n".join(lines), and for an empty file "".split("\n") is ['']
+        # while "".splitlines() (what Comparison stores) is [] -- so splitting
+        # would report every empty pane as modified forever (e.g. /dev/null,
+        # which p4/git pass for the absent side of an add or delete).
+        if pane.text == "\n".join(self.comparison.lines[i]):
             return
         self._mark_dirty(i)
         if self._rediff_timer is not None:
@@ -484,7 +494,7 @@ class FileDiffView(ComparisonView):
             self.app.bell()
             return
         merged = self.comparison.merge_all_non_conflicting()
-        if merged.split("\n") == self.comparison.lines[1]:
+        if merged == "\n".join(self.comparison.lines[1]):
             self.app.bell()  # nothing mergeable
             return
         pane = self.panes[1]
