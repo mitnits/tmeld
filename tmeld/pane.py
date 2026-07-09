@@ -269,9 +269,13 @@ class DiffPane(GraphicsOverlay, TextArea):
         text = super().get_line(line_index)
         line_style = self._line_styles.get(line_index)
         if line_style is not None:
-            # Pad so the chunk background paints the whole row, matching
-            # Meld's line-background semantics
-            text.set_length(max(len(text), self.size.width))
+            # Pad so the chunk background paints the whole row, matching Meld's
+            # line-background semantics. Pad to the *scrollable* width (the
+            # longest line), not the viewport: a short line inside a chunk must
+            # stay filled when the pane is scrolled right past the viewport
+            # edge, or the fill runs out and reveals white.
+            width = max(len(text), self.virtual_size.width, self.size.width)
+            text.set_length(width)
             text.stylize(line_style)
         for start, end in self._inline_styles.get(line_index, ()):
             text.stylize(self._inline_style, start, end)

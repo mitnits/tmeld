@@ -238,3 +238,43 @@ def test_edit_clears_stale_highlight_without_scroll(paths):
     count, svg = run(scenario())
     assert count == 0
     assert "BDDDFF" not in svg
+
+
+def test_chunk_fill_covers_the_full_scrollable_width(tmp_path):
+    """A short line in a chunk must stay filled when scrolled right, not run out
+    of background at the viewport edge and reveal the page colour."""
+    long = "x = " + ", ".join(f"a{i}" for i in range(30))
+    a = tmp_path / "a"
+    b = tmp_path / "b"
+    a.write_text(f"same\nshort\n{long}\nsame\n", encoding="utf-8")
+    b.write_text(f"same\nSHORT\n{long}CHANGED\nsame\n", encoding="utf-8")
+
+    async def scenario():
+        app = TmeldApp([str(a), str(b)])
+        async with app.run_test(size=(56, 8)) as pilot:
+            await pilot.pause()
+            pane = app.views[0].panes[1]
+            assert pane.virtual_size.width > pane.size.width, "no horizontal scroll"
+
+            # the short chunk line is padded to the scrollable width, not the
+            # viewport width
+            short = pane.get_line(1)
+            assert len(short.plain) >= pane.virtual_size.width
+
+            # and once scrolled right, its visible row shows only the fill
+            pane.scroll_to(x=80, animate=False)
+            await pilot.pause()
+            await pilot.pause()
+            region = pane.content_region
+            strip = app.screen._compositor.render_strips()[region.y + 1]
+            bgs, x = set(), 0
+            for seg in strip:
+                for _ch in seg.text:
+                    if region.x <= x < region.x + region.width and seg.style:
+                        if seg.style.bgcolor:
+                            bgs.add(seg.style.bgcolor.name.lower())
+                    x += 1
+            fill = app.theme_def.chunk["replace"].fill.lower()
+            assert bgs == {fill}, f"expected only {fill}, got {bgs}"
+
+    run(scenario())

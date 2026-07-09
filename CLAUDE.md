@@ -571,6 +571,14 @@ working context that isn't in either.
   self.readonly, file_tab_payload into its readonly list. is_devnull() checks
   the literal path and realpath==os.devnull. An empty REAL file stays editable —
   only /dev/null is special.
+- Chunk fill clipped at the viewport on h-scroll (user, round 25). TUI only.
+  DiffPane.get_line padded the filled row to max(len(text), self.size.width) —
+  the VIEWPORT width. A short line inside a chunk (whose other lines are long
+  enough to enable horizontal scroll) filled only to the visible edge; scrolling
+  right revealed page-colour past it. Fixed: pad to
+  max(len(text), self.virtual_size.width, self.size.width) — virtual_size.width
+  is the longest line, i.e. the scrollable content width. size.width kept as a
+  floor so a momentarily-zero virtual_size at mount is never narrower than before.
 - Still open (bmeld): conflict 3-way FROM the VC view (spec ready,
   untested in browser), tier-3 relay transport, Playwright job in CI,
   favicon, dark theme toggle (palette plumbing exists), folder copy/
